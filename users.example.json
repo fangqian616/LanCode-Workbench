@@ -1,0 +1,14 @@
+{
+  "portalPort": 3088,
+  "relayPort": 3090,
+  "users": [
+    {
+      "name": "alice",
+      "token": "REPLACE_AUTO_GENERATED_ON_FIRST_START"
+    },
+    {
+      "name": "bob",
+      "token": "REPLACE_AUTO_GENERATED_ON_FIRST_START"
+    }
+  ]
+}

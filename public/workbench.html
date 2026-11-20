@@ -1,0 +1,149 @@
+<!doctype html>
+<html lang="zh-CN" data-theme="dark">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>AGY Web 工作台</title>
+  <link rel="stylesheet" href="/assets/workbench.css" />
+</head>
+<body>
+  <div class="workbench-shell">
+    <div class="workbench-main">
+      <!-- Left Sidebar: Workspace Projects & Sessions -->
+      <aside class="panel-col panel-left" id="panel-left">
+        <div class="panel-header">
+          <div class="brand-title"><span class="dot online" id="brand-dot"></span> AGY 工作台</div>
+          <span class="sp"></span>
+          <button class="btn btn-icon" id="btn-new-dir" title="新建工作区目录">📁+</button>
+          <button class="btn btn-primary" id="btn-new-chat" title="新建对话">+ 对话</button>
+        </div>
+        <div class="sidebar-filters">
+          <input class="input-sm" id="session-search" placeholder="搜索对话或目录..." />
+          <div class="filter-chips" id="project-chips"></div>
+        </div>
+        <div class="session-list scroller" id="session-list"></div>
+      </aside>
+
+      <div class="col-resizer" id="resizer-left"></div>
+
+      <!-- Center: Tabs + Chat Stream + Composer -->
+      <main class="panel-col panel-center" id="panel-center">
+        <div class="tab-bar scroller" id="tab-bar">
+          <button class="btn btn-icon" id="btn-toggle-left" title="折叠/展开左侧边栏">☰</button>
+          <div id="tab-list" style="display:flex;gap:4px;align-items:center"></div>
+          <button class="btn btn-icon" id="btn-tab-new" title="新建标签对话">+</button>
+          <span class="sp"></span>
+          <button class="btn btn-icon" id="btn-toggle-right" title="折叠/展开右侧文件栏">◫</button>
+        </div>
+
+        <div class="session-subbar">
+          <span class="pill" id="ws-pill"><span class="dot" id="ws-dot"></span><span id="ws-label">连接中...</span></span>
+          <span class="cwd-path" id="active-cwd">Loading workspace...</span>
+          <span class="sp"></span>
+          <span class="pill" id="usage-pill" hidden>上下文 0%</span>
+        </div>
+
+        <div class="chat-wrap" id="chat-drop-zone">
+          <div class="drop-overlay" id="chat-drop-overlay" hidden>
+            <div>释放以上传到工作区并自动引用</div>
+            <div style="font-size:12px;font-weight:400;color:var(--text-secondary)">支持整个文件夹、图片或任意文件</div>
+          </div>
+
+          <div class="chat-scroll scroller" id="chat-scroll">
+            <div class="chat-inner" id="chat-messages"></div>
+          </div>
+
+          <div class="composer-outer">
+            <div class="composer-box">
+              <div class="att-bar" id="att-bar" hidden></div>
+              <textarea class="composer-textarea scroller" id="composer-input" rows="2" placeholder="输入消息给 AGY…（支持拖入文件/整个文件夹、Ctrl+V 粘贴截图，Enter 发送，Shift+Enter 换行）"></textarea>
+              <div class="composer-toolbar">
+                <div class="popover-anchor">
+                  <button class="btn" id="btn-model-pick">模型: 加载中 ▾</button>
+                  <div class="popover-menu scroller" id="model-menu" hidden></div>
+                </div>
+                <div class="popover-anchor">
+                  <button class="btn" id="btn-mode-pick">模式: Default ▾</button>
+                  <div class="popover-menu scroller" id="mode-menu" hidden></div>
+                </div>
+                <label class="composer-hint" style="display:inline-flex;align-items:center;gap:4px;cursor:pointer">
+                  <input type="checkbox" id="chk-auto-allow" /> 自动允许
+                </label>
+                <span class="sp"></span>
+                <button class="btn" id="btn-attach-file" title="上传文件并引用">📎 文件</button>
+                <button class="btn" id="btn-attach-dir" title="上传整个文件夹并引用">📁 文件夹</button>
+                <button class="btn btn-danger" id="btn-stop" hidden>停止 (Esc)</button>
+                <button class="btn btn-primary" id="btn-send">发送 ↵</button>
+              </div>
+            </div>
+          </div>
+        </div>
+      </main>
+
+      <div class="col-resizer" id="resizer-right"></div>
+
+      <!-- Right Sidebar: Live File Tree + Activity + Preview -->
+      <aside class="panel-col panel-right" id="panel-right">
+        <div class="right-top" id="right-top">
+          <div class="panel-header">
+            <div class="seg-tabs">
+              <button class="seg-btn active" id="tab-btn-tree">目录树</button>
+              <button class="seg-btn" id="tab-btn-act">实时活动 <span id="act-badge"></span></button>
+            </div>
+            <span class="sp"></span>
+            <button class="btn btn-icon" id="btn-tree-refresh" title="刷新目录">↻</button>
+          </div>
+          <div class="tree-toolbar">
+            <input class="input-sm" id="tree-filter" placeholder="筛选文件..." style="flex:1;min-width:90px" />
+            <button class="btn" id="btn-up-file" title="上传文件">+文件</button>
+            <button class="btn" id="btn-up-dir" title="上传文件夹">+文件夹</button>
+            <button class="btn" id="btn-zip-all" title="打包下载全部文件">.zip</button>
+          </div>
+          <div class="tree-scroll scroller" id="tree-container"></div>
+          <div class="tree-scroll scroller" id="act-container" hidden></div>
+        </div>
+
+        <div class="row-resizer" id="resizer-row"></div>
+
+        <div class="right-bottom" id="right-bottom">
+          <div class="preview-head">
+            <span style="font-weight:600">预览</span>
+            <span class="cwd-path" id="preview-title" style="flex:1">点击右侧文件预览</span>
+            <a class="btn" id="preview-raw" href="#" target="_blank" hidden>新窗</a>
+            <a class="btn" id="preview-dl" href="#" hidden>下载</a>
+          </div>
+          <div class="preview-body scroller" id="preview-body">
+            <div style="color:var(--text-muted);text-align:center;margin-top:32px;font-size:12px">
+              点击右上角文件即可预览代码、Markdown、图片、网页或 PDF
+            </div>
+          </div>
+        </div>
+      </aside>
+    </div>
+
+    <!-- Bottom Status Bar -->
+    <footer class="status-bar">
+      <span class="pill" id="sb-user">用户: -</span>
+      <span id="sb-syncthing">Syncthing: 检测中...</span>
+      <span id="sb-activity">最近活动: -</span>
+      <span class="sp"></span>
+      <select id="theme-select" class="input-sm" style="width:auto;padding:1px 6px;height:22px;font-size:11px">
+        <option value="dark">主题: 石墨</option>
+        <option value="midnight">主题: 午夜</option>
+        <option value="light">主题: 浅色</option>
+        <option value="paper">主题: 纸张</option>
+      </select>
+      <a href="/files/" target="_blank">经典门户</a>
+      <a href="/activity" target="_blank">活动页</a>
+      <a href="/logout">退出</a>
+    </footer>
+  </div>
+
+  <!-- Hidden file/folder inputs -->
+  <input type="file" id="hidden-file-input" multiple hidden />
+  <input type="file" id="hidden-dir-input" webkitdirectory directory multiple hidden />
+
+  <div class="upload-toast" id="upload-toast" hidden></div>
+  <script src="/assets/workbench.js" defer></script>
+</body>
+</html>

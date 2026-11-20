@@ -1,0 +1,27 @@
+{
+  "name": "agy-web-workbench",
+  "version": "1.0.0",
+  "description": "Multi-user Web Workbench for Antigravity (agy CLI) over ACP — 3-column AI chat, folder drag-and-drop, live SSE file tree & preview, Syncthing sync, and optional Windows user isolation.",
+  "license": "Apache-2.0",
+  "author": "fangqian616",
+  "homepage": "https://fangqian616.github.io/AGY-Web-Workbench/",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/fangqian616/AGY-Web-Workbench.git"
+  },
+  "bugs": {
+    "url": "https://github.com/fangqian616/AGY-Web-Workbench/issues"
+  },
+  "type": "module",
+  "engines": {
+    "node": ">=20.0.0"
+  },
+  "scripts": {
+    "start": "node portal.mjs",
+    "check": "node --check portal.mjs && node --check public/workbench.js && node --check tools/agy-launch.mjs"
+  },
+  "dependencies": {
+    "@rebornix/stdio-to-ws": "^0.2.0",
+    "ws": "^8.18.0"
+  }
+}
