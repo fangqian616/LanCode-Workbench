@@ -33,6 +33,9 @@
     currentModelId: '',
     modes: [],
     currentModeId: 'default',
+    engines: [],
+    defaultEngine: 'codex',
+    currentEngineId: localStorage.getItem('lancode_engine') || '',
     usage: null,
     wsConnected: false,
     wsReady: false,
@@ -48,10 +51,11 @@
   let ws = null;
   let rpcSeq = 1;
   const pendingRpc = new Map();
-  let pingTimer = null;
   let reconnectTimer = null;
+  let suppressReconnectOnce = false;
   let acpLiveSessionId = null;
   let acpLiveCwd = null;
+  let acpLiveEngineId = null;
   let uploadTargetMode = 'composer'; // 'composer' | 'tree'
   let uploadTargetDir = '';
   let saveTimer = null;
@@ -116,6 +120,27 @@
     }, 350);
   }
 
+  function getEffectiveEngineId(sess = getActiveSession()) {
+    const bySess = sess && sess.engineId ? String(sess.engineId).trim().toLowerCase() : '';
+    const byPref = state.currentEngineId ? String(state.currentEngineId).trim().toLowerCase() : '';
+    const isValid = (id) => {
+      if (!id) return false;
+      if (!state.engines.length) return true;
+      const e = state.engines.find(x => x.id === id);
+      return Boolean(e && e.available);
+    };
+    if (isValid(bySess)) return bySess;
+    if (isValid(byPref)) return byPref;
+    if (state.defaultEngine) return state.defaultEngine;
+    const first = state.engines.find(x => x.available);
+    return first ? first.id : 'codex';
+  }
+
+  function getEngineBadgeName(engineId) {
+    const found = state.engines.find(e => e.id === engineId);
+    return found ? (found.badge || found.name) : String(engineId || 'ACP').toUpperCase();
+  }
+
   async function saveSessionNow(sess) {
     if (!sess) return;
     await apiJson('/api/sessions', {
@@ -123,6 +148,7 @@
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
         id: sess.id,
+        engineId: sess.engineId || getEffectiveEngineId(sess),
         acpSessionId: sess.acpSessionId || '',
         title: sess.title,
         subdir: sess.subdir || '',
@@ -255,31 +281,36 @@
     lbl.textContent = text;
   }
 
-  function connectWs() {
-    if (ws && (ws.readyState === WebSocket.OPEN || ws.readyState === WebSocket.CONNECTING)) return Promise.resolve();
+  function connectWs(forceEngineId) {
+    const targetEngine = forceEngineId || getEffectiveEngineId();
+    if (ws && (ws.readyState === WebSocket.OPEN || ws.readyState === WebSocket.CONNECTING)) {
+      if (acpLiveEngineId === targetEngine) return Promise.resolve();
+      suppressReconnectOnce = true;
+      try { ws.close(); } catch {}
+      ws = null;
+      state.wsConnected = false;
+      state.wsReady = false;
+      acpLiveSessionId = null;
+      acpLiveCwd = null;
+    }
     return new Promise((resolve, reject) => {
-      setWsBadge('warn', '连接 ACP...');
+      acpLiveEngineId = targetEngine;
+      setWsBadge('warn', `连接 ${getEngineBadgeName(targetEngine)} ACP...`);
       const proto = location.protocol === 'https:' ? 'wss://' : 'ws://';
-      const socket = new WebSocket(`${proto}${location.host}/agent?cid=${encodeURIComponent(state.clientId)}`);
+      const socket = new WebSocket(`${proto}${location.host}/agent?cid=${encodeURIComponent(state.clientId)}&engine=${encodeURIComponent(targetEngine)}`);
       ws = socket;
       let initDone = false;
 
       socket.onopen = async () => {
         state.wsConnected = true;
-        clearInterval(pingTimer);
-        pingTimer = setInterval(() => {
-          if (ws && ws.readyState === WebSocket.OPEN) {
-            ws.send(JSON.stringify({ jsonrpc: '2.0', method: '$/ping' }) + '\n');
-          }
-        }, 25000);
         try {
           await sendRpc('initialize', {
             protocolVersion: 1,
             clientCapabilities: { terminal: false, fs: { readTextFile: false, writeTextFile: false } },
-          }, 15000);
+          }, 25000);
           state.wsReady = true;
           initDone = true;
-          setWsBadge('ok', 'AGY ACP 就绪');
+          setWsBadge('ok', `${getEngineBadgeName(targetEngine)} ACP 就绪`);
           resolve();
         } catch (e) {
           setWsBadge('err', '初始化失败');
@@ -300,19 +331,23 @@
       };
 
       socket.onclose = () => {
+        if (ws === socket) ws = null;
         state.wsConnected = false;
         state.wsReady = false;
         acpLiveSessionId = null;
-        clearInterval(pingTimer);
+        const wasSuppressed = suppressReconnectOnce;
+        suppressReconnectOnce = false;
         for (const [id, p] of pendingRpc) {
           clearTimeout(p.timer);
           p.reject(new Error('WebSocket disconnected'));
         }
         pendingRpc.clear();
-        setWsBadge('warn', '已断开，重连中...');
         if (!initDone) reject(new Error('WS closed before init'));
-        clearTimeout(reconnectTimer);
-        reconnectTimer = setTimeout(() => { connectWs().catch(() => {}); }, 2500);
+        if (!wasSuppressed) {
+          setWsBadge('warn', '已断开，重连中...');
+          clearTimeout(reconnectTimer);
+          reconnectTimer = setTimeout(() => { connectWs().catch(() => {}); }, 2500);
+        }
       };
 
       socket.onerror = () => {
@@ -481,12 +516,14 @@
   }
 
   async function ensureActiveAcpSession() {
-    await connectWs();
     const sess = getActiveSession();
     if (!sess) throw new Error('No active session');
+    const targetEngine = getEffectiveEngineId(sess);
+    if (!sess.engineId) sess.engineId = targetEngine;
+    await connectWs(targetEngine);
     const targetCwd = cwdForSubdir(sess.subdir || '');
 
-    if (acpLiveSessionId && sess.acpSessionId === acpLiveSessionId && acpLiveCwd === targetCwd) {
+    if (acpLiveSessionId && sess.acpSessionId === acpLiveSessionId && acpLiveCwd === targetCwd && acpLiveEngineId === targetEngine) {
       return acpLiveSessionId;
     }
 
@@ -544,8 +581,10 @@
 
   function createLocalSession(subdir = '') {
     const id = 's-' + Date.now().toString(36) + '-' + Math.random().toString(36).slice(2, 6);
+    const engId = getEffectiveEngineId(null);
     const sess = {
       id,
+      engineId: engId,
       acpSessionId: null,
       title: subdir ? `${subdir} · 新对话` : '新对话',
       subdir,
@@ -566,17 +605,21 @@
     state.activeSessionId = id;
     if (!state.openTabIds.includes(id)) state.openTabIds.push(id);
     const sess = getActiveSession();
+    const prevEngine = state.currentEngineId;
     if (sess) {
+      if (sess.engineId) state.currentEngineId = sess.engineId;
       if (sess.modelId) state.currentModelId = sess.modelId;
       if (sess.modeId) state.currentModeId = sess.modeId;
     }
+    const needReconnect = Boolean(sess && acpLiveEngineId && getEffectiveEngineId(sess) !== acpLiveEngineId);
     renderSidebar();
     renderTabs();
     renderSubbar();
+    renderEngineButton();
     renderModelButton();
     renderModeButton();
     renderChat();
-    if (state.wsReady && sess) {
+    if ((state.wsReady || needReconnect || prevEngine !== state.currentEngineId) && sess) {
       ensureActiveAcpSession().catch(() => {});
     }
   }
@@ -960,21 +1003,97 @@
     $('btn-stop').hidden = !state.busy;
   }
 
-  // ---------- Model & Mode Pickers ----------
+  // ---------- Engine, Model & Mode Pickers ----------
+  function renderEngineButton() {
+    const btn = $('btn-engine-pick');
+    if (!btn) return;
+    const eid = getEffectiveEngineId();
+    btn.textContent = '引擎: ' + getEngineBadgeName(eid) + ' ▾';
+  }
+
+  function toggleEngineMenu() {
+    const menu = $('engine-menu');
+    $('model-menu').hidden = true;
+    $('mode-menu').hidden = true;
+    if (!menu.hidden) { menu.hidden = true; return; }
+    menu.innerHTML = '';
+    const hdr = document.createElement('div');
+    hdr.className = 'pop-group';
+    hdr.textContent = '切换本地 CLI / ACP 引擎';
+    menu.appendChild(hdr);
+
+    const activeEid = getEffectiveEngineId();
+    for (const eng of state.engines) {
+      const btn = document.createElement('button');
+      btn.type = 'button';
+      btn.className = 'pop-item' + (eng.id === activeEid ? ' selected' : '');
+      if (!eng.available) btn.style.opacity = '0.52';
+      const statusTxt = eng.id === activeEid
+        ? '✓'
+        : (eng.available ? (eng.hostConfigured ? '就绪' : '可用') : '未安装');
+      const statusCol = eng.available ? 'var(--status-online)' : 'var(--text-muted)';
+      btn.title = eng.hint || eng.name;
+      btn.innerHTML = `<span>${escHtml(eng.name)}</span><span style="font-size:10.5px;color:${statusCol}">${statusTxt}</span>`;
+      btn.onclick = async () => {
+        menu.hidden = true;
+        if (!eng.available) {
+          showToast(`${eng.name} 暂未安装：${eng.hint || ''}`, 3600);
+          return;
+        }
+        if (state.busy) {
+          showToast('当前任务仍在运行，请先停止后再切换引擎', 2500);
+          return;
+        }
+        if (eng.id === activeEid && state.wsReady) return;
+        state.currentEngineId = eng.id;
+        localStorage.setItem('lancode_engine', eng.id);
+        const sess = getActiveSession();
+        if (sess) {
+          sess.engineId = eng.id;
+          sess.acpSessionId = '';
+          sess.modelId = '';
+          scheduleSaveSession(sess);
+        }
+        state.models = [];
+        state.modes = [];
+        state.currentModelId = '';
+        state.currentModeId = 'default';
+        acpLiveSessionId = null;
+        acpLiveCwd = null;
+        renderEngineButton();
+        renderModelButton();
+        renderModeButton();
+        if (ws) {
+          suppressReconnectOnce = true;
+          try { ws.close(); } catch {}
+          ws = null;
+          state.wsConnected = false;
+          state.wsReady = false;
+        }
+        try {
+          await ensureActiveAcpSession();
+          showToast(`已切换引擎至 ${eng.name}`, 2000);
+        } catch (err) {
+          showToast(`切换 ${eng.name} 失败: ${err.message || err}`, 3500);
+        }
+      };
+      menu.appendChild(btn);
+    }
+    menu.hidden = false;
+  }
+
   function groupModels(models) {
     const groups = new Map([
-      ['Carbon (Ultra)', []],
-      ['Hydrogen', []],
-      ['Neon / Argon', []],
       ['Claude', []],
+      ['Codex / OpenAI', []],
+      ['Gemini / Antigravity', []],
       ['其他模型', []],
     ]);
     for (const m of models) {
-      const id = String(m.modelId || m.id || '');
-      if (id.includes('carbon')) groups.get('Carbon (Ultra)').push(m);
-      else if (id.includes('hydrogen')) groups.get('Hydrogen').push(m);
-      else if (id.includes('neon') || id.includes('argon')) groups.get('Neon / Argon').push(m);
-      else if (id.includes('claude')) groups.get('Claude').push(m);
+      const id = String(m.modelId || m.id || '').toLowerCase();
+      if (id.includes('claude')) groups.get('Claude').push(m);
+      else if (id.includes('gpt') || id.includes('codex') || /\bo[134]\b/.test(id)) groups.get('Codex / OpenAI').push(m);
+      else if (id.includes('gemini') || id.includes('carbon') || id.includes('hydrogen') || id.includes('neon') || id.includes('argon')) groups.get('Gemini / Antigravity').push(m);
       else groups.get('其他模型').push(m);
     }
     return groups;
@@ -997,6 +1116,7 @@
   function toggleModelMenu() {
     const menu = $('model-menu');
     $('mode-menu').hidden = true;
+    $('engine-menu').hidden = true;
     if (!menu.hidden) { menu.hidden = true; return; }
     if (state.models.length === 0) {
       ensureActiveAcpSession().then(() => { renderModelMenuItems(); menu.hidden = false; }).catch(() => {});
@@ -1038,6 +1158,7 @@
   function toggleModeMenu() {
     const menu = $('mode-menu');
     $('model-menu').hidden = true;
+    $('engine-menu').hidden = true;
     if (!menu.hidden) { menu.hidden = true; return; }
     const modes = state.modes.length ? state.modes : [
       { id: 'default', name: 'Default' },
@@ -1530,9 +1651,11 @@
       localStorage.setItem('agy_auto_allow', state.autoAllow ? '1' : '0');
     };
 
+    $('btn-engine-pick').onclick = (e) => { e.stopPropagation(); toggleEngineMenu(); };
     $('btn-model-pick').onclick = (e) => { e.stopPropagation(); toggleModelMenu(); };
     $('btn-mode-pick').onclick = (e) => { e.stopPropagation(); toggleModeMenu(); };
     document.addEventListener('click', () => {
+      $('engine-menu').hidden = true;
       $('model-menu').hidden = true;
       $('mode-menu').hidden = true;
     });
@@ -1656,9 +1779,14 @@
       state.user = me.user;
       state.root = me.root;
       state.syncthing = me.syncthing;
+      state.engines = me.engines || [];
+      state.defaultEngine = me.defaultEngine || 'codex';
+      const prefEng = state.engines.find(e => e.id === state.currentEngineId && e.available);
+      if (!prefEng) state.currentEngineId = state.defaultEngine;
       state.tree = treeRes.tree || [];
       state.sessions = sessRes.sessions || [];
       state.activity = actRes;
+      renderEngineButton();
 
       $('sb-user').textContent = '用户: ' + state.user;
       const stEl = $('sb-syncthing');

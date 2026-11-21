@@ -1,4 +1,4 @@
-/* AGY Web Workbench — Docs Interactive Controller */
+/* LanCode Workbench — Docs Interactive Controller */
 (() => {
   'use strict';
 
@@ -9,19 +9,19 @@
     zh: {
       nav_demo: '交互演示',
       nav_features: '核心特性',
-      nav_arch: '系统架构',
+      nav_arch: '多引擎架构',
       nav_cli: '运维命令',
       nav_compare: '对比',
-      hero_eyebrow: '多用户 Antigravity 浏览器工作台 · Zero External npm Deps',
-      hero_title: '把一台 Antigravity 主机变成团队隔离的浏览器 AI 工作台',
-      hero_sub: '专为合用开发机、实验室与远程团队打造：三栏式 TAKT Workbench 实时流式对话、文件夹递归拖拽上传、SSE 文件树热更新、Syncthing 双向同步与独立 Token / NTFS 隔离，开箱即用。',
+      hero_eyebrow: 'Claude Code · Codex · Antigravity · Gemini CLI · ACP Hub',
+      hero_title: '一台主机登录，全组局域网隔离共用',
+      hero_sub: '专为合租室友、科研实验室与小团队打造：只需在一台主力机完成 Claude Code、Codex、Antigravity 或 Gemini CLI 登录，即可为每位成员分配独立沙箱工作台与 Token 链接，网页直接切换引擎、拖拽整个文件夹并实时双向同步。',
       hero_cta_primary: '3 分钟快速部署',
-      hero_cta_secondary: '体验交互工作台',
+      hero_cta_secondary: '体验多引擎工作台',
       terminal_label: 'Windows 快速部署 (PowerShell / CMD)',
       btn_copy: '复制',
       btn_copied: '已复制 ✓',
-      pill_1: 'Node.js >= 20 零第三方依赖',
-      pill_2: 'WebSocket /agent 自动 cwd 注入',
+      pill_1: '内置 codex-acp & claude-agent-acp',
+      pill_2: '多引擎热切换 · 自动 cwd 沙箱注入',
       pill_3: 'SSE /api/events 实时文件树',
       pill_4: 'Syncthing agy-<user> 双向同步',
       mode_sim: '交互演示',
@@ -32,52 +32,58 @@
       qp_svg: '✨ 生成日落山脉 SVG',
       qp_server: '⚡ 检查 server.ts 路由',
       qp_sync: '🔄 查看 SSE 文件刷新机制',
-      sim_placeholder: '输入指令以体验流式响应与右侧文件预览...',
+      sim_placeholder: '切换 Claude / Codex / AGY 引擎并发送消息体验流式响应...',
       sim_send: '发送',
       sim_drop_hint: '📁 支持文件与整个文件夹递归拖拽上传',
       sim_preview_badge: '实时预览',
       shot_caption: '真实运行截图：三栏式布局（左侧会话栏 / 中间 ACP 思维链与工具卡片流 / 右侧实时 SSE 文件树与 SVG 渲染预览）',
       feat_kicker: 'CAPABILITIES',
-      feat_title: '为什么选择 AGY Web Workbench',
-      feat_desc: '不再让合用主机上的多个用户相互踩工作区、手动传 zip 或猜 CLI 执行进度。',
-      b1_title: '三栏工作台与 ACP WebSocket 实时流',
-      b1_desc: '灵感源自 TAKT 桌面工作台：左侧多会话持久化切换，中间实时展示 Thought 思考过程、工具调用状态卡与流式 Markdown 输出；portal.mjs 在服务端自动将 WebSocket params.cwd 改写至当前用户的独立沙箱目录。',
+      feat_title: '为什么选择 LanCode Workbench',
+      feat_desc: '不再需要每人购买一套订阅并反复配环境，也不再让团队成员互相覆盖目录、手动传 zip 或盲等终端结果。',
+      b1_title: '一台主机登录，网页自由切换 Claude / Codex / AGY / Gemini',
+      b1_desc: '基于开放标准 ACP v1 协议，开箱内置 @agentclientprotocol/codex-acp 与 claude-agent-acp 适配器，同时支持原生 Antigravity、Gemini CLI 与 OpenCode。宿主机登录一次或填好中转密钥，浏览器端按会话一键切引擎；portal.mjs 在服务端自动将 WebSocket params.cwd 锁定到用户沙箱目录。',
       b2_title: '文件夹拖拽上传与 SSE 文件树',
-      b2_desc: '基于 webkitGetAsEntry() 递归读取本地文件夹，一键保留相对路径上传；右侧工作区通过 /api/events 实时推送变更，60 秒内修改文件带绿色脉冲高亮，底部直接预览图片、SVG 与代码。',
-      b3_title: '室友 / 队员本地文件夹双向同步',
+      b2_desc: '基于 webkitGetAsEntry() 递归读取本地文件夹，保留完整相对路径一键上传；右侧工作区通过 /api/events 实时推送变更，60 秒内修改文件带绿色脉冲高亮，底部直接预览图片、SVG 与代码。',
+      b3_title: '室友 / 队员本地 IDE 双向同步',
       b3_desc: '集成便携版 Syncthing（GUI 默认绑定 127.0.0.1:8384），为每位成员生成私有共享文件夹 agy-<name>，通过设备 ID 一键配对后，本地 IDE 修改与 Agent 生成产物实时双向同步。',
-      b4_title: '多用户 Token 门户与 Windows ACL 隔离',
-      b4_desc: '每名用户拥有独立随机 Token 与 Cookie 会话；portal.mjs 严格校验路径边界，可选配 setup-isolation.ps1 自动创建低权限 Windows 本地账户并配置 NTFS 权限，隔离底层系统目录。',
-      b5_title: '主机活动监控与远程运维视图',
-      b5_desc: '内置 /activity HTML 仪表盘与 /activity.json 接口，实时查看在线用户、活跃 ACP 会话与文件访问轨迹，方便管理员排查阻塞或审计使用情况。',
-      b6_title: '纯 Node.js 标准库与一键批处理，5 分钟完成上线',
-      b6_desc: '核心 portal.mjs、public/workbench.js 与 tools/agy-launch.mjs 零第三方 npm 运行时依赖，不触发漫长的 node_modules 构建。附带 Install / Start / Manage-Users / Manage-Syncthing / Allow-Firewall / Setup-Isolation 全套脚手架。',
+      b4_title: '零信任门户校验与 Windows ACL 隔离',
+      b4_desc: '无需交出宿主机远程桌面密码或账号凭据：每名成员拥有独立随机 Token 与 Cookie 会话，路径穿越严防死守，并可选配 setup-isolation.ps1 创建低权限 Windows 账户施加 NTFS 权限边界。',
+      b5_title: '主机活动监控与多会话持久化',
+      b5_desc: '内置 /activity 仪表盘与 /activity.json 遥测，持久化记录每名用户的历史对话及关联引擎（engineId），支持标签页切换、模型切换与 Permission Confirm 权限弹窗。',
+      b6_title: '开箱即用安装器与代理自动探测，3 分钟拉起全栈服务',
+      b6_desc: 'Install.cmd 自动识别本地代理端口安装依赖与便携 Syncthing；tools/acp-engines.mjs 在 Windows 下直接通过 node.exe 拉起适配器入口并自动透传代理环境，规避 .cmd 包装器的参数兼容坑。',
       arch_kicker: 'ARCHITECTURE',
-      arch_title: '请求流向与安全隔离边界',
-      arch_desc: '客户端无需暴露底层 CLI 端口或本机磁盘，所有文件操作与 ACP 会话均经过 Portal 身份校验与沙箱重写。',
-      a1_title: '团队成员浏览器 / 本地 IDE',
-      a1_li1: '通过专属链接 /login?token=... 登录工作台',
-      a1_li2: '三栏界面发起 ACP 对话，拖拽上传文件或文件夹',
-      a1_li3: '可选通过 Syncthing 同步本地 IDE 目录',
-      a2_title: 'portal.mjs 安全网关与静态服务',
-      a2_li1: '校验 users.json Token 与 HttpOnly Cookie',
-      a2_li2: '拦截路径穿越，限制文件 API 于 users/<name>',
-      a2_li3: 'WS /agent 代理并自动覆盖 params.cwd',
-      a3_title: 'Antigravity ACP (:3090) & 存储',
-      a3_li1: 'tools/agy-launch.mjs 拉起或诊断 Antigravity CLI',
-      a3_li2: 'SSE /api/events 实时监听并广播文件树变动',
-      a3_li3: 'Syncthing (:8384 / :22000) 与可选 NTFS ACL 隔离',
+      arch_title: '局域网共享与安全隔离边界',
+      arch_desc: '成员只访问 3088 端口与个人工作区，宿主机上的系统盘符及各 CLI 原始登录凭据目录始终保留在隔离边界之后。',
+      a1_title: '室友 / 团队成员设备',
+      a1_li1: '打开专属免密链接 /?t=... 登录个人沙箱',
+      a1_li2: '在工具栏一键切换 Codex / Claude / AGY / Gemini',
+      a1_li3: '网页拖拽上传文件夹，或用 Syncthing 同步本地 IDE',
+      a2_title: 'portal.mjs 安全网关与会话中心',
+      a2_li1: '校验 users.json 独立 Token 与 HttpOnly Cookie',
+      a2_li2: '拦截路径穿越，限制文件 API 与 SSE 于 users/<name>',
+      a2_li3: '拦截 WS /agent 消息并强制改写 params.cwd',
+      a3_title: '多引擎 ACP 子进程池与同步',
+      a3_li1: 'tools/acp-engines.mjs 按 ?engine= 动态孵化并透传本地代理',
+      a3_li2: '统一复用宿主机的订阅登录态（~/.codex, ~/.claude, agy）或 API Key',
+      a3_li3: 'Syncthing (:8384 / :22000) 与可选 Windows NTFS ACL',
       cli_kicker: 'OPERATIONS',
       cli_title: '开箱即用的命令行与批处理工具箱',
       cli_desc: '所有操作均有对应的 PowerShell 脚本（.ps1）与双击可用入口（.cmd），覆盖安装、用户管理、双向同步与权限隔离。',
       cmp_kicker: 'BEFORE & AFTER',
-      cmp_title: '从“共享本机桌面”到“隔离 Web 工作台”',
+      cmp_title: '从“各自配置 / 共享桌面”到“局域网多引擎工作台”',
       cmp_col1: '使用维度',
-      cmp_col2: '直接共享原主机 / 命令行',
-      cmp_col3: 'AGY Web Workbench',
+      cmp_col2: '各自配置 / 共享原桌面',
+      cmp_col3: 'LanCode Workbench',
+      cmp_r0_k: '主机能力与成本复用',
+      cmp_r0_b: '每位室友/成员分别折腾代理、Node 环境与高额 CLI 订阅',
+      cmp_r0_a: '一台主力机一次配置即可全组局域网浏览器直连共用，免配本地环境',
+      cmp_r6_k: '多 CLI 引擎切换',
+      cmp_r6_b: '单一终端只绑死一个工具，换 Claude 或 Codex 要切窗口',
+      cmp_r6_a: '工作台底部栏一键切换 Codex / Claude Code / Antigravity / Gemini / OpenCode',
       cmp_r1_k: '工作区隔离',
-      cmp_r1_b: '所有人共用同一目录，极易误删或覆盖彼此代码',
-      cmp_r1_a: '按用户分配 users/<name> 沙箱，服务端强制改写 cwd 并校验路径',
+      cmp_r1_b: '共用同一目录或远程桌面，极易误删或覆盖彼此代码',
+      cmp_r1_a: '按用户分配 users/<name> 沙箱，服务端强制改写 params.cwd 并校验路径',
       cmp_r2_k: '文件夹上传与同步',
       cmp_r2_b: '需要手动压缩打包、走网盘或 SCP 传文件',
       cmp_r2_a: '网页直接拖拽整个文件夹上传，或通过 Syncthing 本地实时双向同步',
@@ -85,12 +91,9 @@
       cmp_r3_b: '终端纯文本刷屏，生成图片/文档后还要手动找路径打开',
       cmp_r3_a: 'Thought 思考块 + 工具调用卡片 + SSE 自动高亮新文件与底部内嵌预览',
       cmp_r4_k: '账号与系统安全',
-      cmp_r4_b: '远程桌面共享或单密钥裸奔，系统磁盘完全暴露',
-      cmp_r4_a: '独立 Token 轮换 + Cookie 鉴权，可选 Windows 低权限账户 NTFS ACL',
-      cmp_r5_k: '部署维护成本',
-      cmp_r5_b: '手动配置反向代理、鉴权服务和同步脚本',
-      cmp_r5_a: '零 npm 第三方依赖，Install.cmd & Start-Server.cmd 一键拉起全栈服务',
-      footer_note: 'Inspired by TAKT Workbench & powered by Node.js + Antigravity ACP + Syncthing',
+      cmp_r4_b: '直接交出远程桌面密码或系统全盘权限完全暴露',
+      cmp_r4_a: '独立可轮换 Token + Cookie 鉴权，可选 Windows 低权限账户 NTFS ACL',
+      footer_note: 'Multi-CLI LAN Workbench powered by ACP, Node.js & Syncthing',
       footer_top: '返回顶部 ↑'
     },
     en: {
@@ -99,16 +102,16 @@
       nav_arch: 'Architecture',
       nav_cli: 'CLI',
       nav_compare: 'Compare',
-      hero_eyebrow: 'Multi-User Antigravity Portal & ACP Workbench · Zero External npm Deps',
-      hero_title: 'Turn one Antigravity host into an isolated multi-user browser workbench',
-      hero_sub: 'Built for shared dev machines, labs, and roommates: TAKT-style 3-column workbench, recursive folder drag-and-drop, SSE live file tree, Syncthing 2-way sync, and per-user token + NTFS isolation.',
+      hero_eyebrow: 'Claude Code · Codex · Antigravity · Gemini CLI · ACP Hub',
+      hero_title: 'One Host, Whole LAN — Share Local Coding CLIs Safely',
+      hero_sub: 'Built for dorms, research labs, and small teams: authenticate Claude Code, Codex, Antigravity, or Gemini CLI once on a single host, and give every teammate an isolated browser sandbox with live engine switching, recursive folder drop, and Syncthing 2-way sync.',
       hero_cta_primary: '3-Minute Quick Start',
-      hero_cta_secondary: 'Try Interactive Demo',
+      hero_cta_secondary: 'Try Multi-Engine Demo',
       terminal_label: 'Windows Quick Start (PowerShell / CMD)',
       btn_copy: 'Copy',
       btn_copied: 'Copied ✓',
-      pill_1: 'Zero External npm Dependencies (Node >= 20)',
-      pill_2: 'Auto params.cwd WS Injection',
+      pill_1: 'Bundled codex-acp & claude-agent-acp',
+      pill_2: 'Hot-Switch Engines · Enforced Sandbox cwd',
       pill_3: 'SSE /api/events Live File Tree',
       pill_4: 'Syncthing agy-<user> 2-Way Sync',
       mode_sim: 'Interactive Demo',
@@ -119,51 +122,57 @@
       qp_svg: '✨ Generate Sunset SVG',
       qp_server: '⚡ Inspect server.ts routes',
       qp_sync: '🔄 Explain SSE file watch',
-      sim_placeholder: 'Type a prompt to simulate ACP streaming & live file preview...',
+      sim_placeholder: 'Switch Codex / Claude / AGY engine and send a prompt...',
       sim_send: 'Send',
       sim_drop_hint: '📁 Drag & drop files or entire folders recursively',
       sim_preview_badge: 'Live Preview',
       shot_caption: 'Live production screenshot: 3-column layout (sessions sidebar / ACP thoughts & tool cards / live SSE file tree & inline SVG preview)',
       feat_kicker: 'CAPABILITIES',
-      feat_title: 'Why AGY Web Workbench',
-      feat_desc: 'Stop letting teammates overwrite a shared folder, zip files manually, or guess raw CLI agent progress.',
-      b1_title: 'TAKT-Style 3-Column Workbench & ACP Streaming',
-      b1_desc: 'Inspired by TAKT desktop ergonomics: persistent left session switcher, center stream with Thought blocks, tool-call status cards, and live Markdown; portal.mjs transparently rewrites WebSocket params.cwd to each user’s sandbox.',
+      feat_title: 'Why LanCode Workbench',
+      feat_desc: 'Stop forcing every teammate to juggle proxies, CLI installs, and overlapping folders on a single shared machine.',
+      b1_title: 'Authenticate Once, Switch Claude / Codex / AGY / Gemini in Browser',
+      b1_desc: 'Built on the open ACP v1 standard with bundled @agentclientprotocol/codex-acp and claude-agent-acp adapters alongside native Antigravity, Gemini CLI, and OpenCode. Every WS /agent frame has params.cwd locked to the user sandbox.',
       b2_title: 'Recursive Folder Drag & Drop + Live SSE Tree',
       b2_desc: 'Uses webkitGetAsEntry() to upload nested folders preserving relative paths. Right-hand file tree listens to /api/events via SSE, pulsing recently modified files (<60s) with inline SVG, Markdown, and code previews.',
       b3_title: 'Syncthing Bidirectional Workspace Sync',
       b3_desc: 'Bundles portable Syncthing setup (GUI bound to 127.0.0.1:8384) with private per-user agy-<name> folders. Pair via Device ID so local IDE edits and Agent outputs stay continuously synchronized.',
-      b4_title: 'Per-User Token Portal & Optional NTFS ACL Isolation',
-      b4_desc: 'Each teammate receives a random login token & HttpOnly cookie. Server routes guard against path traversal, while optional setup-isolation.ps1 creates low-privilege Windows users with strict NTFS ACLs.',
-      b5_title: 'Host Activity Telemetry Dashboard',
-      b5_desc: 'Built-in /activity HTML dashboard and /activity.json feed surface active users, ongoing ACP sessions, and recent file operations for effortless troubleshooting.',
-      b6_title: 'Zero Third-Party Runtime Deps & One-Click Scripts',
-      b6_desc: 'Core portal.mjs, public/workbench.js, and tools/agy-launch.mjs rely purely on Node.js >= 20 built-ins—no heavy node_modules. Ships with Install, Start, Manage-Users, Manage-Syncthing, Firewall, and Isolation scripts.',
+      b4_title: 'Zero-Trust Token Portal & Optional NTFS ACL Isolation',
+      b4_desc: 'Never hand out RDP passwords or host logins: teammates sign in with random per-user tokens & HttpOnly cookies. Strict path checks and optional setup-isolation.ps1 Windows NTFS ACLs protect the host.',
+      b5_title: 'Host Activity Telemetry & Persistent Multi-Engine Sessions',
+      b5_desc: 'Built-in /activity dashboard and /activity.json feed alongside persisted session history (engineId, modelId, modeId), tab switching, and interactive permission approval cards.',
+      b6_title: 'Zero-Friction Installer & Proxy Auto-Detection',
+      b6_desc: 'Install.cmd detects local proxies automatically to install dependencies & Syncthing; tools/acp-engines.mjs spawns adapters cleanly via node.exe and injects proxy env vars without .cmd quoting headaches.',
       arch_kicker: 'ARCHITECTURE',
-      arch_title: 'Request Flow & Isolation Boundary',
-      arch_desc: 'Clients never access raw CLI sockets or host disks directly; every HTTP, SSE, and WebSocket message traverses token auth and sandbox path rewriting.',
+      arch_title: 'LAN Sharing & Isolation Boundary',
+      arch_desc: 'Teammates interact strictly with port 3088 and their sandboxed folder while host disks and raw CLI credentials remain behind the server boundary.',
       a1_title: 'Teammate Browser / Local IDE',
-      a1_li1: 'Signs in with personalized /login?token=... link',
-      a1_li2: 'Streams ACP tasks & drops folders in 3-column workbench',
-      a1_li3: 'Optional Syncthing client mirrors local workspace',
-      a2_title: 'portal.mjs Auth Gateway & File Server',
+      a1_li1: 'Signs in via personalized /?t=... sandbox link',
+      a1_li2: 'Switches Codex / Claude / AGY / Gemini in the bottom bar',
+      a1_li3: 'Drops folders in browser or pairs local IDE via Syncthing',
+      a2_title: 'portal.mjs Auth Gateway & Session Hub',
       a2_li1: 'Validates users.json tokens & HttpOnly session cookies',
-      a2_li2: 'Blocks path traversal; scopes file APIs to users/<name>',
-      a2_li3: 'Proxies WS /agent and injects params.cwd sandbox',
-      a3_title: 'Antigravity ACP (:3090) & Storage',
-      a3_li1: 'tools/agy-launch.mjs boots or diagnoses Antigravity CLI',
-      a3_li2: 'SSE /api/events pushes live fs changes to tree view',
-      a3_li3: 'Syncthing (:8384 / :22000) & optional NTFS ACL isolation',
+      a2_li2: 'Blocks path traversal; scopes file APIs & SSE to users/<name>',
+      a2_li3: 'Proxies WS /agent and enforces params.cwd sandbox',
+      a3_title: 'Multi-Engine ACP Pool & Sync',
+      a3_li1: 'tools/acp-engines.mjs spawns ?engine= per session with proxy env',
+      a3_li2: 'Reuses host CLI login state (~/.codex, ~/.claude, agy) or API keys',
+      a3_li3: 'Syncthing (:8384 / :22000) & optional Windows NTFS ACLs',
       cli_kicker: 'OPERATIONS',
       cli_title: 'Ready-to-Run Scripts & CLI Reference',
       cli_desc: 'Every administrative workflow ships as both a clean PowerShell script (.ps1) and a double-click Windows wrapper (.cmd).',
       cmp_kicker: 'BEFORE & AFTER',
-      cmp_title: 'From Shared Local Desktop to Isolated Web Workbench',
+      cmp_title: 'From Ad-Hoc CLI & Shared Desktop to LanCode Workbench',
       cmp_col1: 'Dimension',
-      cmp_col2: 'Shared Host / Raw CLI',
-      cmp_col3: 'AGY Web Workbench',
+      cmp_col2: 'Shared Host / Separate Setups',
+      cmp_col3: 'LanCode Workbench',
+      cmp_r0_k: 'Host & Auth Reuse',
+      cmp_r0_b: 'Every teammate repeats proxy tuning, CLI installs & individual plans',
+      cmp_r0_a: 'Authenticate once on the host workstation; teammates collaborate zero-setup via browser',
+      cmp_r6_k: 'Multi-CLI Switching',
+      cmp_r6_b: 'Stuck in a single vendor terminal per window',
+      cmp_r6_a: 'Switch Codex / Claude Code / Antigravity / Gemini / OpenCode live from the toolbar',
       cmp_r1_k: 'Workspace Isolation',
-      cmp_r1_b: 'Everyone edits one directory, risking accidental overwrites',
+      cmp_r1_b: 'Everyone edits one directory or RDP desktop, risking overwrites',
       cmp_r1_a: 'Dedicated users/<name> sandboxes with enforced server-side cwd injection',
       cmp_r2_k: 'Folder Upload & Sync',
       cmp_r2_b: 'Manual zip archives, chat uploads, or ad-hoc SCP transfers',
@@ -172,27 +181,24 @@
       cmp_r3_b: 'Scrolling CLI text; finding generated assets requires manual navigation',
       cmp_r3_a: 'Thought blocks, tool status cards, <60s SSE pulse highlights & inline preview',
       cmp_r4_k: 'Access & Host Security',
-      cmp_r4_b: 'Shared desktop logins or unauthenticated localhost tunnels',
+      cmp_r4_b: 'Exposes RDP passwords or full local disk credentials',
       cmp_r4_a: 'Per-user rotatable tokens + optional low-privilege Windows NTFS ACLs',
-      cmp_r5_k: 'Setup & Maintenance',
-      cmp_r5_b: 'Wire up reverse proxies, auth middleware, and watchers by hand',
-      cmp_r5_a: 'Zero npm deps; Install.cmd & Start-Server.cmd start everything in minutes',
-      footer_note: 'Inspired by TAKT Workbench & powered by Node.js + Antigravity ACP + Syncthing',
+      footer_note: 'Multi-CLI LAN Workbench powered by ACP, Node.js & Syncthing',
       footer_top: 'Back to top ↑'
     }
   };
 
   const CLI_DATA = {
     install: {
-      zhDesc: '克隆仓库后运行 Install.cmd 初始化配置与 Syncthing（可用 -SkipSyncthing 跳过），随后启动门户并按需放行防火墙端口（TCP 3088 / Syncthing 22000 / 21027）。',
-      enDesc: 'Clone the repository, run Install.cmd to bootstrap users.json & Syncthing (pass -SkipSyncthing to skip), start the portal, and optionally open firewall ports.',
+      zhDesc: '克隆仓库后运行 Install.cmd 自动安装 Node 依赖（内置 codex-acp / claude-agent-acp）与可选 Syncthing，随后启动多引擎工作台并按需放行防火墙。',
+      enDesc: 'Clone the repo, run Install.cmd to install bundled ACP adapters & optional Syncthing, start the multi-engine server, and optionally open LAN firewall rules.',
       code:
-`# 1. Install dependencies & optional portable Syncthing
+`# 1. Install bundled ACP adapters (codex-acp, claude-agent-acp) & optional Syncthing
 Install.cmd
 # or via PowerShell:
 powershell -ExecutionPolicy Bypass -File .\\install.ps1 [-SkipSyncthing]
 
-# 2. Start portal (:3088), ACP launcher (:3090), and Syncthing
+# 2. Start LanCode Workbench (:3088, auto-manages Codex/Claude/AGY/Gemini ACP)
 Start-Server.cmd
 # or headless without opening browser:
 powershell -ExecutionPolicy Bypass -File .\\start-server.ps1 -NoBrowser -NoUi
@@ -200,13 +206,13 @@ powershell -ExecutionPolicy Bypass -File .\\start-server.ps1 -NoBrowser -NoUi
 # 3. Allow LAN access through Windows Firewall (prompts UAC)
 Allow-Firewall.cmd
 
-# 4. Stop services cleanly
+# 4. Stop portal & child ACP processes cleanly
 Stop-Server.cmd
 powershell -ExecutionPolicy Bypass -File .\\stop-server.ps1 -IncludeSyncthing`
     },
     users: {
-      zhDesc: '使用 Manage-Users.cmd 或 manage-users.ps1 增删团队成员、生成免密直达登录链接或轮换泄露的 Token。',
-      enDesc: 'Manage teammates with Manage-Users.cmd or manage-users.ps1: add sandboxes, print tokenized login links, rotate secrets, or remove inactive accounts.',
+      zhDesc: '使用 Manage-Users.cmd 或 manage-users.ps1 增删局域网成员、生成免密直达登录链接或轮换泄露的 Token。',
+      enDesc: 'Manage LAN teammates with Manage-Users.cmd or manage-users.ps1: add sandboxes, print tokenized login links, rotate secrets, or remove inactive accounts.',
       code:
 `# List all configured users & active status
 powershell -ExecutionPolicy Bypass -File .\\manage-users.ps1 -Action List
@@ -264,6 +270,13 @@ powershell -ExecutionPolicy Bypass -File .\\setup-isolation.ps1 -Mode Revert -Re
     }
   };
 
+  const ENGINE_LABELS = {
+    codex: { badge: 'Codex', status: 'CODEX ACP · READY', defaultModel: 'gpt-5.4' },
+    claude: { badge: 'Claude', status: 'CLAUDE ACP · READY', defaultModel: 'claude-sonnet-4' },
+    agy: { badge: 'AGY', status: 'AGY ACP · READY', defaultModel: 'Hydrogen' },
+    gemini: { badge: 'Gemini', status: 'GEMINI ACP · READY', defaultModel: 'gemini-2.5-pro' },
+  };
+
   const SIM_FILES = {
     'sunset-mountains.svg': {
       age: '12s',
@@ -292,7 +305,7 @@ powershell -ExecutionPolicy Bypass -File .\\setup-isolation.ps1 -Mode Revert -Re
       age: '4m',
       fresh: false,
       type: 'md',
-      content: `# Alice Workspace\n\n- Active Sandbox: users/alice\n- Transport: WS /agent (params.cwd locked)\n- File Events: SSE /api/events\n\n## Recent Assets\n1. sunset-mountains.svg (rendered preview)\n2. server.ts (health & upload handlers)`
+      content: `# Alice Workspace (LanCode)\n\n- Active Sandbox: users/alice\n- Engine Selector: Codex / Claude / AGY / Gemini\n- Transport: WS /agent?engine=... (params.cwd locked)\n- File Events: SSE /api/events\n\n## Recent Assets\n1. sunset-mountains.svg (rendered preview)\n2. server.ts (health & upload handlers)`
     },
     'server.ts': {
       age: '18m',
@@ -304,10 +317,10 @@ export function startPortal(port = 3088) {
   return createServer((req, res) => {
     if (req.url === "/api/me") {
       res.writeHead(200, { "Content-Type": "application/json" });
-      res.end(JSON.stringify({ user: "alice_dev", cwd: "users/alice" }));
+      res.end(JSON.stringify({ user: "alice_dev", engine: "codex", cwd: "users/alice" }));
       return;
     }
-    res.writeHead(200).end("AGY Workbench Ready");
+    res.writeHead(200).end("LanCode Workbench Ready");
   }).listen(port);
 }`
     }
@@ -317,21 +330,21 @@ export function startPortal(port = 3088) {
     {
       id: 's1',
       title: 'Sunset SVG & Route Check',
-      meta: '2 tools · 12s ago',
+      meta: 'Codex · 2 tools · 12s ago',
       prompt: '生成一个日落山脉 SVG 保存为 sunset-mountains.svg，并检查工作区文件。',
-      thought: 'Scanning users/alice sandbox -> composing layered SVG sky/sun/ridges -> writing sunset-mountains.svg (892 bytes).',
+      thought: 'codex-acp -> sandbox users/alice -> composing layered SVG sky/sun/ridges -> writing sunset-mountains.svg (892 bytes).',
       tool: 'write_file("sunset-mountains.svg") -> OK (892 B)',
-      reply: '已生成 `sunset-mountains.svg`，SSE 监听器已自动刷新右侧文件树（绿色脉冲高亮表示 60 秒内更新）。点击右侧文件名即可直接预览渲染效果。',
+      reply: '已生成 `sunset-mountains.svg`，SSE 监听器已自动刷新右侧文件树（绿色脉冲高亮表示 60 秒内更新）。可在下方工具栏随时切换 Codex / Claude / AGY / Gemini 引擎。',
       focusFile: 'sunset-mountains.svg'
     },
     {
       id: 's2',
       title: 'SSE & Sandbox Audit',
-      meta: '1 tool · 18m ago',
+      meta: 'Claude · 1 tool · 18m ago',
       prompt: '检查 server.ts 中的 `/api/me` 隔离响应，并总结路径校验逻辑。',
-      thought: 'Inspecting server.ts -> verifying user cwd confinement and safe path join rules.',
+      thought: 'claude-agent-acp -> inspecting server.ts -> verifying user cwd confinement and safe path join rules.',
       tool: 'read_file("server.ts") -> 13 lines',
-      reply: '`server.ts` 中的 `/api/me` 仅返回当前会话所属用户的 `cwd`（`users/alice`），所有读写与拖拽上传操作都经过服务端路径边界检查。',
+      reply: '`server.ts` 中的 `/api/me` 仅返回当前会话所属用户的 `cwd`（`users/alice`）与可用引擎列表，所有读写与拖拽上传操作都经过服务端路径边界检查。',
       focusFile: 'server.ts'
     }
   ];
@@ -351,8 +364,8 @@ export function startPortal(port = 3088) {
       enPrompt: 'Inspect server.ts default port binding and /api/me isolation handler.',
       thought: 'Parsing server.ts -> checking HTTP handler return paths and default port 3088.',
       tool: 'read_file("server.ts") -> 0 errors',
-      zhReply: '检查通过：`startPortal` 默认监听 `3088`，`/api/me` 正确返回 JSON 格式的 `{ user, cwd }` 上下文。已为你切换右侧预览至 `server.ts`。',
-      enReply: 'Verified `server.ts`: `startPortal` defaults to port `3088` and `/api/me` returns scoped `{ user, cwd }` JSON metadata.',
+      zhReply: '检查通过：`startPortal` 默认监听 `3088`，`/api/me` 正确返回当前用户沙箱上下文。已为你切换右侧预览至 `server.ts`。',
+      enReply: 'Verified `server.ts`: `startPortal` defaults to port `3088` and `/api/me` returns scoped `{ user, engine, cwd }` metadata.',
       file: 'server.ts'
     },
     sync: {
@@ -562,10 +575,13 @@ export function startPortal(port = 3088) {
   }
 
   function updatePickerLabel() {
-    const model = document.getElementById('simModelSelect')?.value || 'Hydrogen';
+    const engineId = document.getElementById('simEngineSelect')?.value || 'codex';
+    const meta = ENGINE_LABELS[engineId] || ENGINE_LABELS.codex;
     const mode = document.getElementById('simModeSelect')?.value || 'Code';
     const tag = document.getElementById('simModeTag');
-    if (tag) tag.textContent = model + ' · ' + mode;
+    const conn = document.getElementById('simConnStatus');
+    if (tag) tag.textContent = meta.badge + ' · ' + mode;
+    if (conn && !streamTimer) conn.textContent = meta.status;
   }
 
   function triggerSimulatedPrompt(promptText, preset) {
@@ -577,6 +593,11 @@ export function startPortal(port = 3088) {
       streamTimer = null;
     }
 
+    const selEngine = document.getElementById('simEngineSelect')?.value || 'codex';
+    const engMeta = ENGINE_LABELS[selEngine] || ENGINE_LABELS.codex;
+    const selModel = document.getElementById('simModelSelect')?.value || engMeta.defaultModel;
+    const selMode = document.getElementById('simModeSelect')?.value || 'Code';
+
     const userMsg = document.createElement('div');
     userMsg.className = 'sim-msg-user';
     userMsg.textContent = promptText.trim();
@@ -586,9 +607,9 @@ export function startPortal(port = 3088) {
     thought.className = 'sim-thought-box';
     const tLabel = document.createElement('div');
     tLabel.className = 'sim-thought-label';
-    tLabel.textContent = 'Thought (streaming...)';
+    tLabel.textContent = `Thought (${engMeta.badge} streaming...)`;
     const tBody = document.createElement('div');
-    tBody.textContent = preset ? preset.thought : 'Routing ACP prompt through WS /agent with locked cwd = users/alice...';
+    tBody.textContent = preset ? preset.thought : `Routing ACP prompt via WS /agent?engine=${selEngine} with locked cwd = users/alice...`;
     thought.appendChild(tLabel);
     thought.appendChild(tBody);
     box.appendChild(thought);
@@ -596,7 +617,7 @@ export function startPortal(port = 3088) {
     const tool = document.createElement('div');
     tool.className = 'sim-tool-card';
     const toolLeft = document.createElement('span');
-    toolLeft.textContent = preset ? preset.tool : 'inspect_workspace("users/alice")';
+    toolLeft.textContent = preset ? preset.tool : `inspect_workspace("users/alice", engine="${selEngine}")`;
     const toolRight = document.createElement('span');
     toolRight.className = 'sim-tool-status';
     toolRight.textContent = 'RUNNING';
@@ -609,16 +630,14 @@ export function startPortal(port = 3088) {
     box.appendChild(reply);
     box.scrollTop = box.scrollHeight;
 
-    if (status) status.textContent = 'ACP STREAMING...';
+    if (status) status.textContent = `${engMeta.badge.toUpperCase()} STREAMING...`;
 
     const targetFile = preset ? preset.file : 'server.ts';
-    const selModel = document.getElementById('simModelSelect')?.value || 'Hydrogen';
-    const selMode = document.getElementById('simModeSelect')?.value || 'Code';
     const fullReply = preset
       ? (currentLang === 'en' ? preset.enReply : preset.zhReply)
       : (currentLang === 'en'
-          ? `Executed inside sandbox \`users/alice\` (Model: ${selModel}, Mode: ${selMode}). Workspace updates stream to the right-hand tree via SSE \`/api/events\`.`
-          : `已通过沙箱目录 \`users/alice\` 执行请求（Model: ${selModel}, Mode: ${selMode}）。所有文件更改会通过 SSE \`/api/events\` 立即反映到右侧文件树。`);
+          ? `Executed via \`${engMeta.badge}\` in sandbox \`users/alice\` (Model: ${selModel}, Mode: ${selMode}). Workspace updates stream to the right-hand tree via SSE \`/api/events\`.`
+          : `已通过 \`${engMeta.badge}\` 引擎在沙箱目录 \`users/alice\` 执行请求（Model: ${selModel}, Mode: ${selMode}）。所有文件更改会通过 SSE \`/api/events\` 立即反映到右侧文件树。`);
 
     let idx = 0;
     streamTimer = setInterval(() => {
@@ -628,9 +647,9 @@ export function startPortal(port = 3088) {
       if (idx >= fullReply.length) {
         clearInterval(streamTimer);
         streamTimer = null;
-        tLabel.textContent = 'Thought (0.9s)';
+        tLabel.textContent = `Thought (${engMeta.badge} · 0.9s)`;
         toolRight.textContent = 'DONE';
-        if (status) status.textContent = 'ACP STREAM · READY';
+        if (status) status.textContent = engMeta.status;
         Object.keys(SIM_FILES).forEach((k) => {
           SIM_FILES[k].fresh = k === targetFile;
           if (k === targetFile) SIM_FILES[k].age = 'just now';
@@ -702,6 +721,12 @@ export function startPortal(port = 3088) {
       });
     });
 
+    document.getElementById('simEngineSelect')?.addEventListener('change', (e) => {
+      const meta = ENGINE_LABELS[e.target.value];
+      const modelSel = document.getElementById('simModelSelect');
+      if (meta && modelSel) modelSel.value = meta.defaultModel;
+      updatePickerLabel();
+    });
     document.getElementById('simModelSelect')?.addEventListener('change', updatePickerLabel);
     document.getElementById('simModeSelect')?.addEventListener('change', updatePickerLabel);
 
@@ -714,8 +739,8 @@ export function startPortal(port = 3088) {
         const info = document.createElement('div');
         info.className = 'sim-thought-box';
         info.textContent = currentLang === 'zh'
-          ? '新会话已就绪，工作目录锁定为 users/alice。点击下方快捷提示或输入任意内容体验流式输出。'
-          : 'New session ready (cwd locked to users/alice). Click a quick prompt or send any message.';
+          ? '新会话已就绪，工作目录锁定为 users/alice。切换任意 CLI 引擎并输入指令即可体验。'
+          : 'New session ready (cwd locked to users/alice). Pick any CLI engine and send a prompt.';
         box.appendChild(info);
       }
     });

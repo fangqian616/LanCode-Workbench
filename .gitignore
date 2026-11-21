@@ -16,3 +16,4 @@ user-links.txt
 *.err
 .env
 *credentials*
+package-lock.json

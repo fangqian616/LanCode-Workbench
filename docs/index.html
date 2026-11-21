@@ -3,8 +3,8 @@
 <head>
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>AGY Web Workbench — Multi-User ACP Workbench &amp; Sync Portal</title>
-  <meta name="description" content="Turn one Antigravity CLI host into an isolated multi-user browser workbench with per-user workspaces, real-time ACP streaming, folder drag-and-drop, SSE live file tree, and Syncthing bidirectional sync." />
+  <title>LanCode Workbench — One Host, Whole LAN · Multi-CLI AI Coding Workbench</title>
+  <meta name="description" content="一台主机登录，全组局域网隔离共用：在隔离浏览器沙箱中共享主机上的 Claude Code、Codex CLI、Antigravity 与 Gemini CLI，支持实时 SSE 文件树、文件夹递归拖拽与 Syncthing 双向同步。" />
   <link rel="preconnect" href="https://fonts.googleapis.com" />
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
   <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500;600&display=swap" rel="stylesheet" />
@@ -15,20 +15,20 @@
   <header class="navbar">
     <div class="nav-inner">
       <a class="brand" href="#top">
-        <span class="brand-mark">AGY</span>
-        <span>AGY Web Workbench</span>
+        <span class="brand-mark">LC</span>
+        <span>LanCode Workbench</span>
       </a>
       <nav class="nav-links" aria-label="Primary">
         <a href="#demo" data-i18n="nav_demo">交互演示</a>
         <a href="#features" data-i18n="nav_features">核心特性</a>
-        <a href="#architecture" data-i18n="nav_arch">系统架构</a>
+        <a href="#architecture" data-i18n="nav_arch">多引擎架构</a>
         <a href="#cli" data-i18n="nav_cli">运维命令</a>
         <a href="#compare" data-i18n="nav_compare">对比</a>
       </nav>
       <div class="nav-actions">
         <button id="langToggle" class="icon-btn" type="button" aria-label="Switch language">EN</button>
         <button id="themeToggle" class="icon-btn" type="button" aria-label="Toggle theme">☀ Light</button>
-        <a class="icon-btn nav-github-btn" href="https://github.com/fangqian616/AGY-Web-Workbench" target="_blank" rel="noopener noreferrer" aria-label="GitHub Repository">
+        <a class="icon-btn nav-github-btn" href="https://github.com/fangqian616/LanCode-Workbench" target="_blank" rel="noopener noreferrer" aria-label="GitHub Repository">
           <svg width="15" height="15" viewBox="0 0 16 16" fill="currentColor" aria-hidden="true">
             <path d="M8 0C3.58 0 0 3.58 0 8c0 3.54 2.29 6.53 5.47 7.59.4.07.55-.17.55-.38 0-.19-.01-.82-.01-1.49-2.01.37-2.53-.49-2.69-.94-.09-.23-.48-.94-.82-1.13-.28-.15-.68-.52-.01-.53.63-.01 1.08.58 1.23.82.72 1.21 1.87.87 2.33.66.07-.52.28-.87.51-1.07-1.78-.2-3.64-.89-3.64-3.95 0-.87.31-1.59.82-2.15-.08-.2-.36-1.02.08-2.12 0 0 .67-.21 2.2.82.64-.18 1.32-.27 2-.27s1.36.09 2 .27c1.53-1.04 2.2-.82 2.2-.82.44 1.1.16 1.92.08 2.12.51.56.82 1.27.82 2.15 0 3.07-1.87 3.75-3.65 3.95.29.25.54.73.54 1.48 0 1.07-.01 1.93-.01 2.2 0 .21.15.46.55.38A8.01 8.01 0 0 0 16 8c0-4.42-3.58-8-8-8z"/>
           </svg>
@@ -44,16 +44,16 @@
       <div class="container">
         <div class="eyebrow">
           <span class="pulse-dot"></span>
-          <span data-i18n="hero_eyebrow">多用户 Antigravity 浏览器工作台 · Zero External npm Deps</span>
+          <span data-i18n="hero_eyebrow">Claude Code · Codex · Antigravity · Gemini CLI · ACP Hub</span>
         </div>
-        <h1 data-i18n="hero_title">把一台 Antigravity 主机变成团队隔离的浏览器 AI 工作台</h1>
+        <h1 data-i18n="hero_title">一台主机登录，全组局域网隔离共用</h1>
         <p class="hero-sub" data-i18n="hero_sub">
-          专为合用开发机、实验室与远程团队打造：三栏式 TAKT Workbench 实时流式对话、文件夹递归拖拽上传、SSE 文件树热更新、Syncthing 双向同步与独立 Token / NTFS 隔离，开箱即用。
+          专为合租室友、科研实验室与小团队打造：只需在一台主力机完成 Claude Code、Codex、Antigravity 或 Gemini CLI 登录，即可为每位成员分配独立沙箱工作台与 Token 链接，网页直接切换引擎、拖拽整个文件夹并实时双向同步。
         </p>
 
         <div class="hero-cta-row">
           <a class="btn-primary" href="#cli" data-i18n="hero_cta_primary">3 分钟快速部署</a>
-          <a class="btn-secondary" href="#demo" data-i18n="hero_cta_secondary">体验交互工作台</a>
+          <a class="btn-secondary" href="#demo" data-i18n="hero_cta_secondary">体验多引擎工作台</a>
         </div>
 
         <div class="terminal-bar">
@@ -62,14 +62,14 @@
             <span data-i18n="terminal_label">Windows Quick Start (PowerShell / CMD)</span>
           </div>
           <div class="terminal-bar-body">
-            <code><span class="terminal-prompt">&gt;</span>git clone https://github.com/fangqian616/AGY-Web-Workbench.git &amp;&amp; cd AGY-Web-Workbench &amp;&amp; Install.cmd &amp;&amp; Start-Server.cmd</code>
-            <button class="copy-btn" type="button" data-copy="git clone https://github.com/fangqian616/AGY-Web-Workbench.git && cd AGY-Web-Workbench && Install.cmd && Start-Server.cmd" data-i18n="btn_copy">复制</button>
+            <code><span class="terminal-prompt">&gt;</span>git clone https://github.com/fangqian616/LanCode-Workbench.git &amp;&amp; cd LanCode-Workbench &amp;&amp; Install.cmd &amp;&amp; Start-Server.cmd</code>
+            <button class="copy-btn" type="button" data-copy="git clone https://github.com/fangqian616/LanCode-Workbench.git && cd LanCode-Workbench && Install.cmd && Start-Server.cmd" data-i18n="btn_copy">复制</button>
           </div>
         </div>
 
         <div class="hero-pills">
-          <span class="hero-pill"><span class="pulse-dot"></span> <span data-i18n="pill_1">Node.js &gt;= 20 零第三方依赖</span></span>
-          <span class="hero-pill" data-i18n="pill_2">WebSocket /agent 自动 cwd 注入</span>
+          <span class="hero-pill"><span class="pulse-dot"></span> <span data-i18n="pill_1">内置 codex-acp &amp; claude-agent-acp</span></span>
+          <span class="hero-pill" data-i18n="pill_2">多引擎热切换 · 自动 cwd 沙箱注入</span>
           <span class="hero-pill" data-i18n="pill_3">SSE /api/events 实时文件树</span>
           <span class="hero-pill" data-i18n="pill_4">Syncthing agy-&lt;user&gt; 双向同步</span>
         </div>
@@ -102,7 +102,7 @@
             </div>
             <div class="sim-status-pill">
               <span class="pulse-dot"></span>
-              <span id="simConnStatus">ACP STREAM · READY</span>
+              <span id="simConnStatus">CODEX ACP · READY</span>
             </div>
           </div>
 
@@ -121,8 +121,8 @@
             <!-- Column 2: Chat & Composer -->
             <section class="sim-col-mid">
               <div class="sim-chat-header">
-                <span id="simChatTitle" class="sim-chat-title">Sunset SVG &amp; Server Check</span>
-                <span id="simModeTag" class="sim-mode-tag">Hydrogen · Code</span>
+                <span id="simChatTitle" class="sim-chat-title">Sunset SVG &amp; Route Check</span>
+                <span id="simModeTag" class="sim-mode-tag">Codex · Code</span>
               </div>
               <div id="simMessages" class="sim-messages"></div>
               <div class="sim-composer">
@@ -132,15 +132,21 @@
                   <button class="sim-quick-chip" type="button" data-prompt-key="sync" data-i18n="qp_sync">🔄 查看 SSE 文件刷新机制</button>
                 </div>
                 <div class="sim-input-row">
-                  <input id="simInput" class="sim-input" type="text" placeholder="输入指令以体验流式响应与右侧文件预览..." data-i18n-placeholder="sim_placeholder" />
+                  <input id="simInput" class="sim-input" type="text" placeholder="切换 Claude / Codex / AGY 引擎并发送消息体验流式响应..." data-i18n-placeholder="sim_placeholder" />
                   <button id="simSendBtn" class="sim-send-btn" type="button" data-i18n="sim_send">发送</button>
                 </div>
                 <div class="sim-pickers-row">
+                  <select id="simEngineSelect" class="sim-select" aria-label="Engine picker">
+                    <option value="codex">Engine: Codex</option>
+                    <option value="claude">Engine: Claude Code</option>
+                    <option value="agy">Engine: Antigravity</option>
+                    <option value="gemini">Engine: Gemini CLI</option>
+                  </select>
                   <select id="simModelSelect" class="sim-select" aria-label="Model picker">
+                    <option value="gpt-5.4">Model: gpt-5.4</option>
+                    <option value="claude-sonnet-4">Model: claude-sonnet-4</option>
                     <option value="Hydrogen">Model: Hydrogen</option>
-                    <option value="Carbon">Model: Carbon</option>
-                    <option value="Neon">Model: Neon</option>
-                    <option value="Claude">Model: Claude</option>
+                    <option value="gemini-2.5-pro">Model: gemini-2.5-pro</option>
                   </select>
                   <select id="simModeSelect" class="sim-select" aria-label="Mode picker">
                     <option value="Code">Mode: Code</option>
@@ -172,7 +178,7 @@
 
         <!-- Real Production Screenshot -->
         <div id="shotView" class="screenshot-frame hidden">
-          <img src="images/screenshot.png" alt="AGY Web Workbench running live in browser with 3-column layout, SVG preview, and ACP streaming" />
+          <img src="images/screenshot.png" alt="LanCode Workbench running live in browser with 3-column layout, SVG preview, and ACP streaming" />
           <div class="screenshot-caption">
             <span data-i18n="shot_caption">真实运行截图：三栏式布局（左侧会话栏 / 中间 ACP 思维链与工具卡片流 / 右侧实时 SSE 文件树与 SVG 渲染预览）</span>
             <span class="mono">0.0.0.0:3088 · /workbench</span>
@@ -186,69 +192,69 @@
       <div class="container">
         <div class="section-head">
           <div class="section-kicker" data-i18n="feat_kicker">CAPABILITIES</div>
-          <h2 data-i18n="feat_title">为什么选择 AGY Web Workbench</h2>
-          <p data-i18n="feat_desc">不再让合用主机上的多个用户相互踩工作区、手动传 zip 或猜 CLI 执行进度。</p>
+          <h2 data-i18n="feat_title">为什么选择 LanCode Workbench</h2>
+          <p data-i18n="feat_desc">不再需要每人购买一套订阅并反复配环境，也不再让团队成员互相覆盖目录、手动传 zip 或盲等终端结果。</p>
         </div>
 
         <div class="bento-grid">
           <article class="bento-card wide">
-            <span class="bento-badge">TAKT-STYLE 3-COLUMN WORKBENCH</span>
-            <h3 data-i18n="b1_title">三栏工作台与 ACP WebSocket 实时流</h3>
-            <p data-i18n="b1_desc">灵感源自 TAKT 桌面工作台：左侧多会话持久化切换，中间实时展示 Thought 思考过程、工具调用状态卡与流式 Markdown 输出；portal.mjs 在服务端自动将 WebSocket params.cwd 改写至当前用户的独立沙箱目录。</p>
-            <div class="bento-code">WS /agent -&gt; auto-inject params.cwd = users/&lt;user&gt;/workspace</div>
+            <span class="bento-badge">MULTI-CLI ACP ROUTING</span>
+            <h3 data-i18n="b1_title">一台主机登录，网页自由切换 Claude / Codex / AGY / Gemini</h3>
+            <p data-i18n="b1_desc">基于开放标准 ACP v1 协议，开箱内置 @agentclientprotocol/codex-acp 与 claude-agent-acp 适配器，同时支持原生 Antigravity、Gemini CLI 与 OpenCode。宿主机登录一次或填好中转密钥，浏览器端按会话一键切引擎；portal.mjs 在服务端自动将 WebSocket params.cwd 锁定到用户沙箱目录。</p>
+            <div class="bento-code">WS /agent?engine=codex|claude|agy|gemini -&gt; sandbox cwd = users/&lt;user&gt;</div>
           </article>
 
           <article class="bento-card">
             <span class="bento-badge">SSE + DRAG &amp; DROP</span>
             <h3 data-i18n="b2_title">文件夹拖拽上传与 SSE 文件树</h3>
-            <p data-i18n="b2_desc">基于 webkitGetAsEntry() 递归读取本地文件夹，一键保留相对路径上传；右侧工作区通过 /api/events 实时推送变更，60 秒内修改文件带绿色脉冲高亮，底部直接预览图片、SVG 与代码。</p>
+            <p data-i18n="b2_desc">基于 webkitGetAsEntry() 递归读取本地文件夹，保留完整相对路径一键上传；右侧工作区通过 /api/events 实时推送变更，60 秒内修改文件带绿色脉冲高亮，底部直接预览图片、SVG 与代码。</p>
           </article>
 
           <article class="bento-card">
             <span class="bento-badge">SYNCTHING 2-WAY SYNC</span>
-            <h3 data-i18n="b3_title">室友 / 队员本地文件夹双向同步</h3>
+            <h3 data-i18n="b3_title">室友 / 队员本地 IDE 双向同步</h3>
             <p data-i18n="b3_desc">集成便携版 Syncthing（GUI 默认绑定 127.0.0.1:8384），为每位成员生成私有共享文件夹 agy-&lt;name&gt;，通过设备 ID 一键配对后，本地 IDE 修改与 Agent 生成产物实时双向同步。</p>
           </article>
 
           <article class="bento-card">
             <span class="bento-badge">SANDBOX &amp; NTFS ACL</span>
-            <h3 data-i18n="b4_title">多用户 Token 门户与 Windows ACL 隔离</h3>
-            <p data-i18n="b4_desc">每名用户拥有独立随机 Token 与 Cookie 会话；portal.mjs 严格校验路径边界，可选配 setup-isolation.ps1 自动创建低权限 Windows 本地账户并配置 NTFS 权限，隔离底层系统目录。</p>
+            <h3 data-i18n="b4_title">零信任门户校验与 Windows ACL 隔离</h3>
+            <p data-i18n="b4_desc">无需交出宿主机远程桌面密码或账号凭据：每名成员拥有独立随机 Token 与 Cookie 会话，路径穿越严防死守，并可选配 setup-isolation.ps1 创建低权限 Windows 账户施加 NTFS 权限边界。</p>
           </article>
 
           <article class="bento-card">
             <span class="bento-badge">/activity TELEMETRY</span>
-            <h3 data-i18n="b5_title">主机活动监控与远程运维视图</h3>
-            <p data-i18n="b5_desc">内置 /activity HTML 仪表盘与 /activity.json 接口，实时查看在线用户、活跃 ACP 会话与文件访问轨迹，方便管理员排查阻塞或审计使用情况。</p>
+            <h3 data-i18n="b5_title">主机活动监控与多会话持久化</h3>
+            <p data-i18n="b5_desc">内置 /activity 仪表盘与 /activity.json 遥测，持久化记录每名用户的历史对话及关联引擎（engineId），支持标签页切换、模型切换与 Permission Confirm 权限弹窗。</p>
           </article>
 
           <article class="bento-card wide">
-            <span class="bento-badge">ZERO EXTERNAL DEPS</span>
-            <h3 data-i18n="b6_title">纯 Node.js 标准库与一键批处理，5 分钟完成上线</h3>
-            <p data-i18n="b6_desc">核心 portal.mjs、public/workbench.js 与 tools/agy-launch.mjs 零第三方 npm 运行时依赖，不触发漫长的 node_modules 构建。附带 Install / Start / Manage-Users / Manage-Syncthing / Allow-Firewall / Setup-Isolation 全套双语脚手架。</p>
+            <span class="bento-badge">ZERO-CONFIG WINDOWS DEPLOY</span>
+            <h3 data-i18n="b6_title">开箱即用安装器与代理自动探测，3 分钟拉起全栈服务</h3>
+            <p data-i18n="b6_desc">Install.cmd 自动识别本地代理端口安装依赖与便携 Syncthing；tools/acp-engines.mjs 在 Windows 下直接通过 node.exe 拉起适配器入口并自动透传代理环境，规避 .cmd 包装器的参数兼容坑。</p>
             <div class="bento-code">Install.cmd  |  Start-Server.cmd  |  Manage-Users.cmd  |  Manage-Syncthing.cmd  |  Allow-Firewall.cmd</div>
           </article>
         </div>
       </div>
     </section>
 
-    <!-- Architecture Diagram -->
+    <!-- Architecture Flow -->
     <section id="architecture" class="section">
       <div class="container">
         <div class="section-head">
           <div class="section-kicker" data-i18n="arch_kicker">ARCHITECTURE</div>
-          <h2 data-i18n="arch_title">请求流向与安全隔离边界</h2>
-          <p data-i18n="arch_desc">客户端无需暴露底层 CLI 端口或本机磁盘，所有文件操作与 ACP 会话均经过 Portal 身份校验与沙箱重写。</p>
+          <h2 data-i18n="arch_title">局域网共享与安全隔离边界</h2>
+          <p data-i18n="arch_desc">成员只访问 3088 端口与个人工作区，宿主机上的系统盘符及各 CLI 原始登录凭据目录始终保留在隔离边界之后。</p>
         </div>
 
         <div class="arch-flow">
           <div class="arch-node">
             <span class="arch-node-tag">LAYER 01 · CLIENT</span>
-            <h3 data-i18n="a1_title">团队成员浏览器 / 本地 IDE</h3>
+            <h3 data-i18n="a1_title">室友 / 团队成员设备</h3>
             <ul class="arch-list">
-              <li data-i18n="a1_li1">通过专属链接 <code>/login?token=...</code> 登录工作台</li>
-              <li data-i18n="a1_li2">三栏界面发起 ACP 对话，拖拽上传文件或文件夹</li>
-              <li data-i18n="a1_li3">可选通过 Syncthing 同步本地 IDE 目录</li>
+              <li data-i18n="a1_li1">打开专属免密链接 <code>/?t=...</code> 登录个人沙箱</li>
+              <li data-i18n="a1_li2">在工具栏一键切换 Codex / Claude / AGY / Gemini</li>
+              <li data-i18n="a1_li3">网页拖拽上传文件夹，或用 Syncthing 同步本地 IDE</li>
             </ul>
           </div>
 
@@ -256,23 +262,23 @@
 
           <div class="arch-node">
             <span class="arch-node-tag">LAYER 02 · PORTAL (:3088)</span>
-            <h3 data-i18n="a2_title">portal.mjs 安全网关与静态服务</h3>
+            <h3 data-i18n="a2_title">portal.mjs 安全网关与会话中心</h3>
             <ul class="arch-list">
-              <li data-i18n="a2_li1">校验 <code>users.json</code> Token 与 HttpOnly Cookie</li>
-              <li data-i18n="a2_li2">拦截路径穿越，限制文件 API 于 <code>users/&lt;name&gt;</code></li>
-              <li data-i18n="a2_li3">WS <code>/agent</code> 代理并自动覆盖 <code>params.cwd</code></li>
+              <li data-i18n="a2_li1">校验 <code>users.json</code> 独立 Token 与 HttpOnly Cookie</li>
+              <li data-i18n="a2_li2">拦截路径穿越，限制文件 API 与 SSE 于 <code>users/&lt;name&gt;</code></li>
+              <li data-i18n="a2_li3">拦截 WS <code>/agent</code> 消息并强制改写 <code>params.cwd</code></li>
             </ul>
           </div>
 
           <div class="arch-arrow" aria-hidden="true">-&gt;</div>
 
           <div class="arch-node">
-            <span class="arch-node-tag">LAYER 03 · HOST &amp; SYNC</span>
-            <h3 data-i18n="a3_title">Antigravity ACP (:3090) &amp; 存储</h3>
+            <span class="arch-node-tag">LAYER 03 · ACP &amp; SYNC</span>
+            <h3 data-i18n="a3_title">多引擎 ACP 子进程池与同步</h3>
             <ul class="arch-list">
-              <li data-i18n="a3_li1"><code>tools/agy-launch.mjs</code> 拉起或诊断 Antigravity CLI</li>
-              <li data-i18n="a3_li2">SSE <code>/api/events</code> 实时监听并广播文件树变动</li>
-              <li data-i18n="a3_li3">Syncthing (<code>:8384</code> / <code>:22000</code>) 与可选 NTFS ACL 隔离</li>
+              <li data-i18n="a3_li1"><code>tools/acp-engines.mjs</code> 按 <code>?engine=</code> 动态孵化并透传本地代理</li>
+              <li data-i18n="a3_li2">统一复用宿主机的订阅登录态（~/.codex, ~/.claude, agy）或 API Key</li>
+              <li data-i18n="a3_li3">Syncthing (<code>:8384</code> / <code>:22000</code>) 与可选 Windows NTFS ACL</li>
             </ul>
           </div>
         </div>
@@ -311,7 +317,7 @@
       <div class="container">
         <div class="section-head">
           <div class="section-kicker" data-i18n="cmp_kicker">BEFORE &amp; AFTER</div>
-          <h2 data-i18n="cmp_title">从“共享本机桌面”到“隔离 Web 工作台”</h2>
+          <h2 data-i18n="cmp_title">从“各自配置 / 共享桌面”到“局域网多引擎工作台”</h2>
         </div>
 
         <div class="table-wrap">
@@ -319,15 +325,25 @@
             <thead>
               <tr>
                 <th data-i18n="cmp_col1">使用维度</th>
-                <th data-i18n="cmp_col2">直接共享原主机 / 命令行</th>
-                <th data-i18n="cmp_col3">AGY Web Workbench</th>
+                <th data-i18n="cmp_col2">各自配置 / 共享原桌面</th>
+                <th data-i18n="cmp_col3">LanCode Workbench</th>
               </tr>
             </thead>
             <tbody>
               <tr>
+                <td data-i18n="cmp_r0_k">主机能力与成本复用</td>
+                <td data-i18n="cmp_r0_b">每位室友/成员分别折腾代理、Node 环境与高额 CLI 订阅</td>
+                <td class="col-after" data-i18n="cmp_r0_a">一台主力机一次配置即可全组局域网浏览器直连共用，免配本地环境</td>
+              </tr>
+              <tr>
+                <td data-i18n="cmp_r6_k">多 CLI 引擎切换</td>
+                <td data-i18n="cmp_r6_b">单一终端只绑死一个工具，换 Claude 或 Codex 要切窗口</td>
+                <td class="col-after" data-i18n="cmp_r6_a">工作台底部栏一键切换 Codex / Claude Code / Antigravity / Gemini / OpenCode</td>
+              </tr>
+              <tr>
                 <td data-i18n="cmp_r1_k">工作区隔离</td>
-                <td data-i18n="cmp_r1_b">所有人共用同一目录，极易误删或覆盖彼此代码</td>
-                <td class="col-after" data-i18n="cmp_r1_a">按用户分配 users/&lt;name&gt; 沙箱，服务端强制改写 cwd 并校验路径</td>
+                <td data-i18n="cmp_r1_b">共用同一目录或远程桌面，极易误删或覆盖彼此代码</td>
+                <td class="col-after" data-i18n="cmp_r1_a">按用户分配 users/&lt;name&gt; 沙箱，服务端强制改写 params.cwd 并校验路径</td>
               </tr>
               <tr>
                 <td data-i18n="cmp_r2_k">文件夹上传与同步</td>
@@ -341,13 +357,8 @@
               </tr>
               <tr>
                 <td data-i18n="cmp_r4_k">账号与系统安全</td>
-                <td data-i18n="cmp_r4_b">远程桌面共享或单密钥裸奔，系统磁盘完全暴露</td>
-                <td class="col-after" data-i18n="cmp_r4_a">独立 Token 轮换 + Cookie 鉴权，可选 Windows 低权限账户 NTFS ACL</td>
-              </tr>
-              <tr>
-                <td data-i18n="cmp_r5_k">部署维护成本</td>
-                <td data-i18n="cmp_r5_b">手动配置反向代理、鉴权服务和同步脚本</td>
-                <td class="col-after" data-i18n="cmp_r5_a">零 npm 第三方依赖，Install.cmd &amp; Start-Server.cmd 一键拉起全栈服务</td>
+                <td data-i18n="cmp_r4_b">直接交出远程桌面密码或系统全盘权限完全暴露</td>
+                <td class="col-after" data-i18n="cmp_r4_a">独立可轮换 Token + Cookie 鉴权，可选 Windows 低权限账户 NTFS ACL</td>
               </tr>
             </tbody>
           </table>
@@ -359,13 +370,13 @@
   <footer class="footer">
     <div class="container footer-inner">
       <div>
-        <strong>AGY Web Workbench</strong> · Apache-2.0 License ·
+        <strong>LanCode Workbench</strong> · Apache-2.0 License ·
         <a href="https://github.com/fangqian616" target="_blank" rel="noopener noreferrer">@fangqian616</a> ·
-        <span data-i18n="footer_note">Inspired by TAKT Workbench &amp; powered by Node.js + Antigravity ACP + Syncthing</span>
+        <span data-i18n="footer_note">Multi-CLI LAN Workbench powered by ACP, Node.js &amp; Syncthing</span>
       </div>
       <div class="footer-links">
-        <a href="https://github.com/fangqian616/AGY-Web-Workbench/blob/main/README.md" target="_blank" rel="noopener noreferrer">README (EN)</a>
-        <a href="https://github.com/fangqian616/AGY-Web-Workbench/blob/main/README.zh-CN.md" target="_blank" rel="noopener noreferrer">README (中文)</a>
+        <a href="https://github.com/fangqian616/LanCode-Workbench/blob/main/README.md" target="_blank" rel="noopener noreferrer">README (EN)</a>
+        <a href="https://github.com/fangqian616/LanCode-Workbench/blob/main/README.zh-CN.md" target="_blank" rel="noopener noreferrer">README (中文)</a>
         <a href="#top" data-i18n="footer_top">返回顶部 ↑</a>
       </div>
     </div>

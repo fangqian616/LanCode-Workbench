@@ -35,18 +35,29 @@ function Test-LoopbackPort([int]$Port) {
     return $false
 }
 
-Write-Host '============ AGY Web Workbench 服务端 ============' -ForegroundColor Cyan
+Write-Host '============ LanCode Workbench 服务端 ============' -ForegroundColor Cyan
 
 $node = Find-Exe @('C:\Program Files\nodejs\node.exe', 'C:\nvm4w\nodejs\node.exe') 'node'
 $agy = Find-Exe @($env:AGY_EXE_PATH, (Join-Path $root 'tools\agy-shared\agy.exe'), (Join-Path $env:LOCALAPPDATA 'agy\bin\agy.exe')) 'agy'
+$codexCli = Find-Exe @($env:CODEX_PATH) 'codex'
+$claudeCli = Find-Exe @($env:CLAUDE_CODE_EXECUTABLE) 'claude'
+$geminiCli = Find-Exe @($env:GEMINI_CLI_PATH) 'gemini'
+$opencodeCli = Find-Exe @($env:OPENCODE_EXE_PATH) 'opencode'
+
+$wsPkg = Join-Path $root 'node_modules\ws\package.json'
+$codexAcp = Join-Path $root 'node_modules\@agentclientprotocol\codex-acp\dist\index.js'
+$claudeAcp = Join-Path $root 'node_modules\@agentclientprotocol\claude-agent-acp\dist\index.js'
 $wsMain = Join-Path $root 'node_modules\@rebornix\stdio-to-ws\dist\main.js'
 $launcherMjs = Join-Path $root 'tools\agy-launch.mjs'
 
 if (-not $node) { Warn '未找到 node.exe（请先安装 Node.js >= 20）'; exit 1 }
-if (-not $agy) { Warn '未找到 agy CLI（请先安装官方 agy CLI 或设置 AGY_EXE_PATH）'; exit 1 }
-if (-not (Test-Path -LiteralPath $wsMain)) { Warn '未安装依赖（请先双击 Install.cmd）'; exit 2 }
-Ok ('agy : ' + $agy)
-Ok ('node: ' + $node)
+if (-not (Test-Path -LiteralPath $wsPkg)) { Warn '未安装依赖（请先双击 Install.cmd）'; exit 2 }
+Ok ('node  : ' + $node)
+if (Test-Path -LiteralPath $codexAcp) { Ok ('Codex ACP : bundled' + $(if ($codexCli) { ' (' + $codexCli + ')' } else { '' })) }
+if (Test-Path -LiteralPath $claudeAcp) { Ok ('Claude ACP: bundled' + $(if ($claudeCli) { ' (' + $claudeCli + ')' } else { '' })) }
+if ($agy) { Ok ('Antigravity: ' + $agy) }
+if ($geminiCli) { Ok ('Gemini CLI : ' + $geminiCli) }
+if ($opencodeCli) { Ok ('OpenCode   : ' + $opencodeCli) }
 
 # 读取 users.json 端口配置（若不存在则按 users.example.json 生成）
 $usersFile = Join-Path $root 'users.json'
@@ -84,24 +95,28 @@ if (Test-Path -LiteralPath $usersFile) {
     } catch { Warn ('users.json 读取失败: ' + $_.Exception.Message) }
 }
 
-# 1) 停掉本工作台旧的 stdio-to-ws 实例
+# 1) 停掉旧的 stdio-to-ws 中转实例
 Get-CimInstance Win32_Process -Filter "Name='node.exe'" -ErrorAction SilentlyContinue |
     Where-Object { $_.CommandLine -like '*stdio-to-ws*' -and ($_.CommandLine -like "*$root*" -or $_.CommandLine -like "*--port $relayPort*") -and $_.CommandLine -notlike '*agy-isolated-launch*' } |
     ForEach-Object { Stop-Process -Id $_.ProcessId -Force -ErrorAction SilentlyContinue }
 
-# 2) 启动 ACP over WebSocket 中转
-Step ('启动 ACP 中转 (ws://127.0.0.1:' + $relayPort + '/) ...')
-$cmdArg = '"' + $node + ' ' + $launcherMjs + ' cli acp"'
-Start-Process -FilePath $node -ArgumentList @($wsMain, $cmdArg, '--port', [string]$relayPort, '--persist', '--grace-period', '-1') `
-    -WorkingDirectory $workspace -WindowStyle Hidden `
-    -RedirectStandardOutput (Join-Path $logs 'acp-ws.log') -RedirectStandardError (Join-Path $logs 'acp-ws.err')
+# 2) 默认由 portal.mjs 按会话动态托管多引擎 ACP；仅当 AGY_USE_EXTERNAL_RELAY=1 且存在 agy 时才拉起外置中转
+if ($env:AGY_USE_EXTERNAL_RELAY -eq '1' -and $agy -and (Test-Path -LiteralPath $wsMain)) {
+    Step ('启动外置 ACP 中转 (ws://127.0.0.1:' + $relayPort + '/) ...')
+    $cmdArg = '"' + $node + ' ' + $launcherMjs + ' cli acp"'
+    Start-Process -FilePath $node -ArgumentList @($wsMain, $cmdArg, '--port', [string]$relayPort, '--persist', '--grace-period', '-1') `
+        -WorkingDirectory $workspace -WindowStyle Hidden `
+        -RedirectStandardOutput (Join-Path $logs 'acp-ws.log') -RedirectStandardError (Join-Path $logs 'acp-ws.err')
 
-$portOk = $false
-for ($i = 0; $i -lt 15; $i++) {
-    Start-Sleep -Seconds 1
-    if (Test-LoopbackPort $relayPort) { $portOk = $true; break }
+    $portOk = $false
+    for ($i = 0; $i -lt 15; $i++) {
+        Start-Sleep -Seconds 1
+        if (Test-LoopbackPort $relayPort) { $portOk = $true; break }
+    }
+    if ($portOk) { Ok ('外置 ACP 中转已就绪: ws://127.0.0.1:' + $relayPort + '/') } else { Warn ($relayPort.ToString() + ' 端口未起来，请查看 logs\acp-ws.err') }
+} else {
+    Step 'ACP 模式: 内置按会话多引擎托管 (Codex / Claude / Antigravity / Gemini / OpenCode)'
 }
-if ($portOk) { Ok ('ACP 中转已就绪: ws://127.0.0.1:' + $relayPort + '/') } else { Warn ($relayPort.ToString() + ' 端口未起来，请查看 logs\acp-ws.err') }
 
 # 3) 启动三栏 Web 工作台与门户 (portal.mjs)
 $portalJs = Join-Path $root 'portal.mjs'
@@ -111,7 +126,7 @@ if (Test-Path -LiteralPath $portalJs) {
         Select-Object -First 1
     $portalUp = ($null -ne $portalProc) -or (Test-LoopbackPort $portalPort)
     if (-not $portalUp) {
-        Step ('启动 AGY Web 工作台 (http://127.0.0.1:' + $portalPort + '/) ...')
+        Step ('启动 LanCode Web 工作台 (http://127.0.0.1:' + $portalPort + '/) ...')
         Start-Process -FilePath $node -ArgumentList @($portalJs) -WorkingDirectory $root -WindowStyle Hidden `
             -RedirectStandardOutput (Join-Path $logs 'portal.log') -RedirectStandardError (Join-Path $logs 'portal.err')
         Start-Sleep -Seconds 2
@@ -165,5 +180,5 @@ if (-not $NoBrowser -and -not $NoUi -and $shareUsers.Count -gt 0) {
 }
 
 Write-Host ''
-Ok 'AGY Web Workbench 服务端已就绪'
+Ok 'LanCode Workbench 服务端已就绪'
 exit 0

@@ -3,7 +3,7 @@
 <head>
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>AGY Web 工作台</title>
+  <title>LanCode Workbench · 局域网多引擎 AI 工作台</title>
   <link rel="stylesheet" href="/assets/workbench.css" />
 </head>
 <body>
@@ -12,7 +12,7 @@
       <!-- Left Sidebar: Workspace Projects & Sessions -->
       <aside class="panel-col panel-left" id="panel-left">
         <div class="panel-header">
-          <div class="brand-title"><span class="dot online" id="brand-dot"></span> AGY 工作台</div>
+          <div class="brand-title"><span class="dot online" id="brand-dot"></span> LanCode 工作台</div>
           <span class="sp"></span>
           <button class="btn btn-icon" id="btn-new-dir" title="新建工作区目录">📁+</button>
           <button class="btn btn-primary" id="btn-new-chat" title="新建对话">+ 对话</button>
@@ -56,8 +56,12 @@
           <div class="composer-outer">
             <div class="composer-box">
               <div class="att-bar" id="att-bar" hidden></div>
-              <textarea class="composer-textarea scroller" id="composer-input" rows="2" placeholder="输入消息给 AGY…（支持拖入文件/整个文件夹、Ctrl+V 粘贴截图，Enter 发送，Shift+Enter 换行）"></textarea>
+              <textarea class="composer-textarea scroller" id="composer-input" rows="2" placeholder="输入消息…（支持一键切换 Claude / Codex / AGY 引擎，拖入文件或整个文件夹，Ctrl+V 粘贴截图）"></textarea>
               <div class="composer-toolbar">
+                <div class="popover-anchor">
+                  <button class="btn" id="btn-engine-pick" title="切换后端 CLI 引擎">引擎: 加载中 ▾</button>
+                  <div class="popover-menu scroller" id="engine-menu" hidden></div>
+                </div>
                 <div class="popover-anchor">
                   <button class="btn" id="btn-model-pick">模型: 加载中 ▾</button>
                   <div class="popover-menu scroller" id="model-menu" hidden></div>

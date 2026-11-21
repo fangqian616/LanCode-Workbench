@@ -1,26 +1,42 @@
 {
-  "name": "agy-web-workbench",
-  "version": "1.0.0",
-  "description": "Multi-user Web Workbench for Antigravity (agy CLI) over ACP — 3-column AI chat, folder drag-and-drop, live SSE file tree & preview, Syncthing sync, and optional Windows user isolation.",
+  "name": "lancode-workbench",
+  "version": "1.1.0",
+  "description": "One Host, Whole LAN — Share local Coding CLIs (Claude Code, Codex, Antigravity, Gemini CLI, OpenCode) in isolated multi-user browser sandboxes with live SSE file tree & Syncthing 2-way sync.",
   "license": "Apache-2.0",
   "author": "fangqian616",
-  "homepage": "https://fangqian616.github.io/AGY-Web-Workbench/",
+  "homepage": "https://fangqian616.github.io/LanCode-Workbench/",
   "repository": {
     "type": "git",
-    "url": "https://github.com/fangqian616/AGY-Web-Workbench.git"
+    "url": "https://github.com/fangqian616/LanCode-Workbench.git"
   },
   "bugs": {
-    "url": "https://github.com/fangqian616/AGY-Web-Workbench/issues"
+    "url": "https://github.com/fangqian616/LanCode-Workbench/issues"
   },
+  "keywords": [
+    "claude-code",
+    "codex-cli",
+    "antigravity",
+    "gemini-cli",
+    "agent-client-protocol",
+    "acp",
+    "lan-sharing",
+    "multi-user",
+    "web-workbench",
+    "ai-coding-agent",
+    "syncthing",
+    "self-hosted"
+  ],
   "type": "module",
   "engines": {
     "node": ">=20.0.0"
   },
   "scripts": {
     "start": "node portal.mjs",
-    "check": "node --check portal.mjs && node --check public/workbench.js && node --check tools/agy-launch.mjs"
+    "check": "node --check portal.mjs && node --check public/workbench.js && node --check tools/agy-launch.mjs && node --check tools/acp-engines.mjs && node --check docs/site.js"
   },
   "dependencies": {
+    "@agentclientprotocol/claude-agent-acp": "^0.109.0",
+    "@agentclientprotocol/codex-acp": "^2.8.0",
     "@rebornix/stdio-to-ws": "^0.2.0",
     "ws": "^8.18.0"
   }

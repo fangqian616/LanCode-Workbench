@@ -10,11 +10,12 @@ import crypto from 'node:crypto';
 import { spawn } from 'node:child_process';
 import { fileURLToPath } from 'node:url';
 import WebSocket, { WebSocketServer } from 'ws';
+import { detectEngines, attachEngineSession, shutdownAllEngines } from './tools/acp-engines.mjs';
 
 const ROOT = path.dirname(fileURLToPath(import.meta.url));
 const PUBLIC_DIR = path.join(ROOT, 'public');
 const CFG_FILE = process.env.AGY_CFG_FILE || path.join(ROOT, 'users.json');
-const USERS_DIR = path.join(ROOT, 'users');
+const USERS_DIR = process.env.AGY_USERS_DIR || path.join(ROOT, 'users');
 const ONLY_USER = (process.env.AGY_ONLY_USER || '').trim().toLowerCase();
 const LOG_DIR = process.env.AGY_LOG_DIR || path.join(ROOT, 'logs');
 const DATA_DIR = process.env.AGY_DATA_DIR || (ONLY_USER ? path.join(LOG_DIR, 'workbench-data') : path.join(ROOT, 'workbench-data'));
@@ -818,10 +819,10 @@ const server = http.createServer(async (req, res) => {
       }
       const badMsg = url.searchParams.get('bad') ? '<p style="color:#f87171">Token 无效，请检查后重试</p>' : '';
       res.writeHead(200, { 'Content-Type': 'text/html; charset=utf-8' });
-      res.end(page('AGY 工作台登录', `
-        <div style="max-width:440px;margin:48px auto;padding:24px;border:1px solid #24292f;border-radius:12px;background:#151920">
-          <h2 style="margin-top:0">AGY Web 工作台</h2>
-          <p class="muted">输入管理员给你的个人 token（或直接打开带 <code>?t=</code> 的专属链接）</p>
+      res.end(page('LanCode Workbench · 登录', `
+        <div style="max-width:460px;margin:48px auto;padding:24px;border:1px solid #24292f;border-radius:12px;background:#151920">
+          <h2 style="margin-top:0">LanCode Workbench</h2>
+          <p class="muted">一台主机登录，全组局域网隔离共用 · 输入管理员给你的个人 token（或直接打开带 <code>?t=</code> 的专属链接）</p>
           ${badMsg}
           <form method="post" action="/login" style="display:flex;gap:8px;margin-top:14px">
             <input type="password" name="token" placeholder="输入个人 token" autofocus style="flex:1">
@@ -849,8 +850,15 @@ const server = http.createServer(async (req, res) => {
         sendJson(res, 200, scanActivity(user.root, user.name)); return;
       }
       if (p === '/api/me' && req.method === 'GET') {
-        const st = await getUserSyncthingStatus(user.name);
-        sendJson(res, 200, { user: user.name, root: user.root, portalPort: PORTAL_PORT, syncthing: st });
+        const [st, eng] = await Promise.all([
+          getUserSyncthingStatus(user.name),
+          Promise.resolve(detectEngines(ROOT)),
+        ]);
+        sendJson(res, 200, { user: user.name, root: user.root, portalPort: PORTAL_PORT, syncthing: st, ...eng });
+        return;
+      }
+      if (p === '/api/engines' && req.method === 'GET') {
+        sendJson(res, 200, detectEngines(ROOT));
         return;
       }
       if (p === '/api/tree' && req.method === 'GET') {
@@ -918,6 +926,7 @@ const server = http.createServer(async (req, res) => {
         const prev = idx >= 0 ? sessions[idx] : {};
         const next = {
           id,
+          engineId: typeof body.engineId === 'string' ? body.engineId : (prev.engineId || ''),
           acpSessionId: typeof body.acpSessionId === 'string' ? body.acpSessionId : (prev.acpSessionId || ''),
           title: typeof body.title === 'string' && body.title.trim() ? body.title.trim().slice(0, 120) : (prev.title || '新对话'),
           subdir: typeof body.subdir === 'string' ? body.subdir.replace(/\\/g, '/').replace(/^\/+|\/+$/g, '') : (prev.subdir || ''),
@@ -1097,8 +1106,34 @@ server.on('upgrade', (req, socket, head) => {
     if (!user) { log('WS rejected (bad token) ' + (req.socket.remoteAddress || '')); fail(401, 'Unauthorized'); return; }
 
     wss.handleUpgrade(req, socket, head, clientWs => {
-      const headers = {};
       const cid = req.headers['x-client-id'] || url.searchParams.get('cid') || '';
+      const reqEngine = (url.searchParams.get('engine') || '').trim().toLowerCase();
+      const useExternalRelay = process.env.AGY_USE_EXTERNAL_RELAY === '1' && (!reqEngine || reqEngine === 'relay');
+
+      const ka = setInterval(() => {
+        try {
+          if (clientWs.readyState === WebSocket.OPEN) clientWs.ping();
+        } catch {}
+      }, 25000);
+      clientWs.on('close', () => clearInterval(ka));
+
+      if (!useExternalRelay) {
+        attachEngineSession({
+          rootDir: ROOT,
+          engineId: reqEngine,
+          clientId: String(cid || ''),
+          user,
+          ws: clientWs,
+          rewritePayload: rewriteClientPayload,
+          log,
+        }).catch(err => {
+          log('ACP attach error (' + user.name + '): ' + (err && err.stack || err));
+          try { clientWs.close(1011, 'Attach error'); } catch {}
+        });
+        return;
+      }
+
+      const headers = {};
       if (cid) headers['x-client-id'] = String(cid);
       const upstream = new WebSocket(`ws://127.0.0.1:${RELAY_PORT}/`, { headers });
       const pending = [];
@@ -1115,7 +1150,7 @@ server.on('upgrade', (req, socket, head) => {
       };
 
       upstream.on('open', () => {
-        log('WS proxy connected: ' + user.name);
+        log('WS proxy connected (external relay): ' + user.name);
         while (pending.length > 0 && upstream.readyState === WebSocket.OPEN) {
           const item = pending.shift();
           upstream.send(item.payload, { binary: item.isBinary });
@@ -1152,9 +1187,20 @@ server.on('upgrade', (req, socket, head) => {
 });
 
 server.listen(PORTAL_PORT, '0.0.0.0', () => {
-  log(`portal listening on 0.0.0.0:${PORTAL_PORT}`);
+  const eng = detectEngines(ROOT);
+  const availList = eng.engines.filter(e => e.available).map(e => e.id).join(', ') || 'none';
+  log(`LanCode portal listening on 0.0.0.0:${PORTAL_PORT} (defaultEngine=${eng.defaultEngine}; available=[${availList}])`);
   const ips = lanIPv4();
   for (const [t, u] of buildUsers()) {
     log(`user ${u.name}: ` + ips.map(ip => `portal http://${ip}:${PORTAL_PORT}/?t=${t}  |  agent ws://${ip}:${PORTAL_PORT}/agent?t=${t}`).join('  ;  '));
   }
 });
+
+for (const sig of ['SIGINT', 'SIGTERM']) {
+  process.on(sig, () => {
+    log(`Received ${sig}, shutting down ACP engines...`);
+    shutdownAllEngines();
+    try { server.close(() => process.exit(0)); } catch { process.exit(0); }
+    setTimeout(() => process.exit(0), 1500).unref();
+  });
+}

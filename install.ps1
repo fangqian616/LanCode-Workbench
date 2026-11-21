@@ -40,7 +40,7 @@ function Resolve-ProxyArg {
     return ''
 }
 
-Write-Host '========== AGY Web Workbench Installer ==========' -ForegroundColor Cyan
+Write-Host '========== LanCode Workbench Installer ==========' -ForegroundColor Cyan
 
 # 1) Check Node.js & npm
 $node = Find-Exe @('C:\Program Files\nodejs\node.exe', 'C:\nvm4w\nodejs\node.exe') 'node'
@@ -55,23 +55,39 @@ $npm = Find-Exe @('C:\Program Files\nodejs\npm.cmd', 'C:\nvm4w\nodejs\npm.cmd') 
 if (-not $npm) { $npm = Find-Exe @() 'npm' }
 if (-not $npm) { Warn '未找到 npm'; exit 1 }
 
-# 2) Check agy CLI
+# 2) Detect available host Coding CLIs
 $agy = Find-Exe @($env:AGY_EXE_PATH, (Join-Path $env:LOCALAPPDATA 'agy\bin\agy.exe')) 'agy'
-if ($agy) {
-    Ok ('agy CLI: ' + $agy)
-} else {
-    Warn '暂未检测到 agy.exe（请确认已安装 Antigravity CLI，或启动前设置环境变量 AGY_EXE_PATH）'
-}
+$codexCli = Find-Exe @($env:CODEX_PATH) 'codex'
+$claudeCli = Find-Exe @($env:CLAUDE_CODE_EXECUTABLE) 'claude'
+$geminiCli = Find-Exe @($env:GEMINI_CLI_PATH) 'gemini'
+$opencodeCli = Find-Exe @($env:OPENCODE_EXE_PATH) 'opencode'
 
-# 3) npm install
-Step '安装 Node 依赖 (@rebornix/stdio-to-ws, ws)...'
+if ($codexCli) { Ok ('Codex CLI: ' + $codexCli) } else { Write-Host '[i] Codex 将通过内置 @agentclientprotocol/codex-acp 运行（复用 ~/.codex 登录态或 OPENAI_API_KEY）' -ForegroundColor DarkGray }
+if ($claudeCli) { Ok ('Claude CLI: ' + $claudeCli) } else { Write-Host '[i] Claude Code 将通过内置 @agentclientprotocol/claude-agent-acp 运行（复用 ~/.claude 登录态或 ANTHROPIC_API_KEY）' -ForegroundColor DarkGray }
+if ($agy) { Ok ('Antigravity CLI: ' + $agy) } else { Write-Host '[i] 未检测到 agy.exe（如不使用 Antigravity 可忽略，或设置 AGY_EXE_PATH）' -ForegroundColor DarkGray }
+if ($geminiCli) { Ok ('Gemini CLI: ' + $geminiCli) }
+if ($opencodeCli) { Ok ('OpenCode CLI: ' + $opencodeCli) }
+
+# 3) npm install (with auto proxy detection for bundled ACP adapters)
+$npmProxy = Resolve-ProxyArg
+$prevHttpProxy = $env:HTTP_PROXY
+$prevHttpsProxy = $env:HTTPS_PROXY
+if ($npmProxy) {
+    $env:HTTP_PROXY = $npmProxy
+    $env:HTTPS_PROXY = $npmProxy
+    Step ('检测到代理 ' + $npmProxy + '，安装多引擎 ACP 适配器 (@agentclientprotocol/codex-acp, @agentclientprotocol/claude-agent-acp, ws)...')
+} else {
+    Step '安装多引擎 ACP 适配器 (@agentclientprotocol/codex-acp, @agentclientprotocol/claude-agent-acp, ws)...'
+}
 Push-Location $root
 try {
     & $npm install --no-audit --no-fund
     if ($LASTEXITCODE -ne 0) { throw "npm install failed ($LASTEXITCODE)" }
-    Ok 'Node 依赖安装完成'
+    Ok 'Node 依赖与多引擎 ACP 适配器安装完成'
 } finally {
     Pop-Location
+    $env:HTTP_PROXY = $prevHttpProxy
+    $env:HTTPS_PROXY = $prevHttpsProxy
 }
 
 # 4) Bootstrap users.json from users.example.json
@@ -139,7 +155,7 @@ if (-not $SkipSyncthing -and -not (Test-Path -LiteralPath $stExe)) {
 
 Write-Host ''
 Ok '安装完成！下一步：'
-Write-Host '  1) 若尚未登录 agy CLI，先在终端运行一次 agy 完成 Google OAuth 登录'
-Write-Host '  2) 双击 Start-Server.cmd 启动服务与 Web 工作台'
+Write-Host '  1) 在本机完成任意一个 CLI 的一次登录（codex login / claude login / agy），或设置对应 API Key 环境变量'
+Write-Host '  2) 双击 Start-Server.cmd 启动 LanCode Workbench（内置 Codex / Claude / AGY / Gemini 切换）'
 Write-Host '  3) 若需局域网访问，双击一次 Allow-Firewall.cmd 放行端口'
 exit 0

@@ -11,10 +11,13 @@ Get-CimInstance Win32_Process -Filter "Name='node.exe'" -ErrorAction SilentlyCon
     Where-Object { $_.CommandLine -like '*stdio-to-ws*' -and $_.CommandLine -like "*$root*" -and $_.CommandLine -notlike '*agy-isolated-launch*' } |
     ForEach-Object { Stop-Process -Id $_.ProcessId -Force -ErrorAction SilentlyContinue }
 
-Write-Host '[*] 停止 Web 工作台门户 (portal.mjs)...'
+Write-Host '[*] 停止 Web 工作台门户 (portal.mjs 及其托管的 ACP 引擎子进程)...'
 Get-CimInstance Win32_Process -Filter "Name='node.exe'" -ErrorAction SilentlyContinue |
     Where-Object { $_.CommandLine -like "*$portalJs*" -and $_.CommandLine -notlike '*--iso-user=*' } |
-    ForEach-Object { Stop-Process -Id $_.ProcessId -Force -ErrorAction SilentlyContinue }
+    ForEach-Object {
+        try { & taskkill.exe /T /F /PID $_.ProcessId 2>$null | Out-Null } catch {}
+        Stop-Process -Id $_.ProcessId -Force -ErrorAction SilentlyContinue
+    }
 
 Write-Host '[*] 停止本地代理桥接...'
 Get-CimInstance Win32_Process -ErrorAction SilentlyContinue |
