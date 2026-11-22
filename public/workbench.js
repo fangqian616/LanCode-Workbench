@@ -50,12 +50,24 @@
 
   let ws = null;
   let rpcSeq = 1;
+  let wsGen = 0;
   const pendingRpc = new Map();
   let reconnectTimer = null;
+  let disconnectGraceTimer = null;
+  let connectPromise = null;
+  let connectTargetEngine = null;
   let suppressReconnectOnce = false;
   let acpLiveSessionId = null;
   let acpLiveCwd = null;
   let acpLiveEngineId = null;
+  const loadedAcpSessions = new Set();
+  const loadingAcpSessions = new Set();
+  const busySessions = new Map(); // sess.id -> { startedAt, lastEventAt, phase, toolName, acpSessionId, runtimeProcesses, liveLog, disconnectedWhileBusy }
+  const expandedDetails = new Set();
+  let liveUiTimer = null;
+  let runtimePollTimer = null;
+  let runtimePollInflight = false;
+  let initialUiVersion = '';
   let uploadTargetMode = 'composer'; // 'composer' | 'tree'
   let uploadTargetDir = '';
   let saveTimer = null;
@@ -67,8 +79,22 @@
     }[c]));
   }
 
+  function escapeRegExp(s) {
+    return String(s || '').replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+  }
+
   function encRel(rel) {
     return String(rel || '').split('/').filter(Boolean).map(encodeURIComponent).join('/');
+  }
+
+  function triggerBrowserDownload(url) {
+    if (!url) return;
+    const a = document.createElement('a');
+    a.href = url;
+    a.style.display = 'none';
+    document.body.appendChild(a);
+    a.click();
+    setTimeout(() => { try { a.remove(); } catch {} }, 1000);
   }
 
   function relTime(ms) {
@@ -133,12 +159,124 @@
     if (isValid(byPref)) return byPref;
     if (state.defaultEngine) return state.defaultEngine;
     const first = state.engines.find(x => x.available);
-    return first ? first.id : 'codex';
+    return first ? first.id : 'agy';
   }
 
   function getEngineBadgeName(engineId) {
     const found = state.engines.find(e => e.id === engineId);
-    return found ? (found.badge || found.name) : String(engineId || 'ACP').toUpperCase();
+    if (found) return found.badge || found.name;
+    if (!engineId) return 'AGY';
+    return String(engineId).toUpperCase();
+  }
+
+  function formatDuration(ms) {
+    const s = Math.max(0, Math.floor(ms / 1000));
+    const m = Math.floor(s / 60);
+    const rem = s % 60;
+    return String(m).padStart(2, '0') + ':' + String(rem).padStart(2, '0');
+  }
+
+  function isSessionBusy(sessId) {
+    return Boolean(sessId && busySessions.has(sessId));
+  }
+
+  function isAnySessionBusy() {
+    return busySessions.size > 0;
+  }
+
+  function syncActiveBusyState() {
+    state.busy = isSessionBusy(state.activeSessionId);
+    updateBusyUi();
+  }
+
+  function startLiveMonitors() {
+    if (!liveUiTimer) {
+      liveUiTimer = setInterval(() => {
+        if (!isAnySessionBusy()) {
+          stopLiveMonitors();
+          return;
+        }
+        const active = getActiveSession();
+        if (active && isSessionBusy(active.id)) {
+          renderLiveBannerInPlace(active);
+          updateRunningToolElapsedInPlace(active);
+        }
+      }, 1000);
+    }
+    if (!runtimePollTimer) {
+      pollRuntimeStatusOnce();
+      runtimePollTimer = setInterval(() => {
+        if (isAnySessionBusy()) pollRuntimeStatusOnce();
+      }, 3000);
+    }
+  }
+
+  function stopLiveMonitors() {
+    if (liveUiTimer) { clearInterval(liveUiTimer); liveUiTimer = null; }
+    if (runtimePollTimer) { clearInterval(runtimePollTimer); runtimePollTimer = null; }
+  }
+
+  function setSessionBusy(sess, active, meta = {}) {
+    if (!sess) return;
+    if (active) {
+      const prev = busySessions.get(sess.id) || {
+        startedAt: Date.now(),
+        lastEventAt: Date.now(),
+        phase: '正在思考与调度...',
+        toolName: '',
+        acpSessionId: sess.acpSessionId || '',
+        runtimeProcesses: [],
+        liveLog: null,
+        disconnectedWhileBusy: false,
+      };
+      busySessions.set(sess.id, { ...prev, ...meta, lastEventAt: Date.now() });
+      startLiveMonitors();
+    } else {
+      busySessions.delete(sess.id);
+      if (!isAnySessionBusy()) stopLiveMonitors();
+    }
+    syncActiveBusyState();
+    refreshHotUpdateBtnLabel();
+  }
+
+  function touchSessionBusy(sess, meta = {}) {
+    if (!sess || !busySessions.has(sess.id)) return;
+    const prev = busySessions.get(sess.id);
+    busySessions.set(sess.id, { ...prev, ...meta, lastEventAt: Date.now(), disconnectedWhileBusy: false });
+    if (sess.id === state.activeSessionId) {
+      renderLiveBannerInPlace(sess);
+    }
+  }
+
+  async function pollRuntimeStatusOnce() {
+    if (runtimePollInflight || !isAnySessionBusy()) return;
+    const active = getActiveSession();
+    const targetSess = (active && isSessionBusy(active.id)) ? active : state.sessions.find(s => isSessionBusy(s.id));
+    if (!targetSess) return;
+    runtimePollInflight = true;
+    try {
+      const sid = encodeURIComponent(targetSess.acpSessionId || acpLiveSessionId || '');
+      const data = await apiJson('/api/runtime-status?sessionId=' + sid);
+      const entry = busySessions.get(targetSess.id);
+      if (entry) {
+        entry.runtimeProcesses = Array.isArray(data.processes) ? data.processes : [];
+        entry.liveLog = data.liveLog || null;
+        if (targetSess.id === state.activeSessionId) {
+          renderLiveBannerInPlace(targetSess);
+        }
+      }
+    } catch {}
+    finally {
+      runtimePollInflight = false;
+    }
+  }
+
+  function refreshHotUpdateBtnLabel() {
+    const btn = $('btn-hot-update');
+    if (!btn || btn.hidden) return;
+    btn.textContent = isAnySessionBusy()
+      ? '✨ 工作台已更新（任务完成后可点此无损刷新）'
+      : '✨ 工作台已热更新，点此刷新';
   }
 
   async function saveSessionNow(sess) {
@@ -156,12 +294,90 @@
         modeId: sess.modeId || state.currentModeId || 'default',
         clientId: state.clientId,
         createdAt: sess.createdAt,
-        messages: sess.messages || [],
+        messages: (sess.messages || []).map(m => {
+          if (m.role !== 'assistant') return m;
+          return { ...m, _done: m._done !== false };
+        }),
       }),
     });
   }
 
   // ---------- Safe Markdown Renderer ----------
+  function resolveWorkspaceHref(rawHref) {
+    const clean = String(rawHref || '').replace(/&amp;/g, '&').replace(/&#39;/g, "'").replace(/&quot;/g, '"').trim();
+    if (!clean) return { kind: 'external', href: '#' };
+
+    const sameOriginPortalRe = /^\/(download|zip|preview|files|activity)(\/.*|\?.*)?$/i;
+    const lanPortalRe = new RegExp(
+      `^https?:\\/\\/(?:${escapeRegExp(location.host)}|localhost|\\d{1,3}(?:\\.\\d{1,3}){3})(?::\\d+)?\\/(download|zip|preview|files|activity)(\\/.*|\\?.*)?$`,
+      'i'
+    );
+    const portalMatch = sameOriginPortalRe.exec(clean) || lanPortalRe.exec(clean);
+    if (portalMatch) {
+      const route = portalMatch[1].toLowerCase();
+      if (route === 'activity') return { kind: 'same_origin_page', href: '/activity' };
+      const tail = (portalMatch[2] || '').split(/[?#]/)[0];
+      let rel = tail.replace(/^\/+|\/+$/g, '');
+      try { rel = decodeURIComponent(rel); } catch {}
+      rel = rel.replace(/^\/+|\/+$/g, '');
+      if (route === 'download' || route === 'zip') {
+        const dlUrl = (route === 'zip' || !rel) ? ('/zip/' + encRel(rel)) : ('/download/' + encRel(rel));
+        return { kind: 'direct_download', rel, href: dlUrl };
+      }
+      return { kind: 'workspace', rel };
+    }
+
+    if (/^file:\/\//i.test(clean) || /^\/?[A-Za-z]:[\\/]/.test(clean)) {
+      let p = clean.split('#')[0].split('?')[0];
+      p = p.replace(/^file:\/\/+/i, '');
+      try { p = decodeURIComponent(p); } catch {}
+      p = p.replace(/\\/g, '/').replace(/^\/+([A-Za-z]:\/)/, '$1').replace(/\/+$/, '');
+
+      const normRoot = String(state.root || '').replace(/\\/g, '/').replace(/\/+$/, '');
+      if (normRoot) {
+        const pLow = p.toLowerCase();
+        const rLow = normRoot.toLowerCase();
+        if (pLow === rLow) return { kind: 'workspace', rel: '' };
+        if (pLow.startsWith(rLow + '/')) {
+          return { kind: 'workspace', rel: p.slice(normRoot.length + 1) };
+        }
+      }
+      if (state.user) {
+        const userRe = new RegExp('/users/' + escapeRegExp(state.user) + '(?:/(.*))?$', 'i');
+        const mUser = userRe.exec(p);
+        if (mUser) return { kind: 'workspace', rel: mUser[1] || '' };
+      }
+      return { kind: 'outside_workspace', displayPath: p };
+    }
+
+    if (/^(?:https?:|mailto:)/i.test(clean)) {
+      return { kind: 'external', href: clean };
+    }
+
+    let rel = clean.split('#')[0].split('?')[0];
+    try { rel = decodeURIComponent(rel); } catch {}
+    rel = rel.replace(/\\/g, '/').replace(/^\.\//, '').replace(/^\/+|\/+$/g, '');
+    return { kind: 'workspace', rel };
+  }
+
+  function renderResolvedLinkHtml(labelHtml, rawHref) {
+    const res = resolveWorkspaceHref(rawHref);
+    if (res.kind === 'workspace') {
+      const dlHref = res.rel ? ('/download/' + encRel(res.rel)) : '/zip/';
+      return `<span class="ws-link-wrap"><a href="${escHtml(dlHref)}" class="ws-preview-link" data-rel="${escHtml(res.rel)}">${labelHtml}</a><a href="${escHtml(dlHref)}" class="ws-dl-chip" title="直接下载文件或打包下载文件夹">⬇</a></span>`;
+    }
+    if (res.kind === 'direct_download') {
+      return `<a href="${escHtml(res.href)}" class="ws-direct-dl" title="直接下载">${labelHtml} ⬇</a>`;
+    }
+    if (res.kind === 'same_origin_page') {
+      return `<a href="${escHtml(res.href)}" target="_blank" rel="noopener noreferrer">${labelHtml}</a>`;
+    }
+    if (res.kind === 'outside_workspace') {
+      return `<span class="pill" title="工作区外路径: ${escHtml(res.displayPath)}">${labelHtml}</span>`;
+    }
+    return `<a href="${escHtml(res.href)}" target="_blank" rel="noopener noreferrer">${labelHtml}</a>`;
+  }
+
   function renderMarkdown(md) {
     const src = String(md || '').replace(/\r\n/g, '\n');
     const blocks = [];
@@ -179,22 +395,45 @@
 
     // Inline formatting
     const formatInline = (s) => {
+      const inlines = [];
+      const stash = (html) => {
+        const k = `\x00INL${inlines.length}\x00`;
+        inlines.push(html);
+        return k;
+      };
       let out = s;
-      out = out.replace(/`([^`\n]+)`/g, '<code>$1</code>');
+      out = out.replace(/`([^`\n]+)`/g, (_m, code) => stash(`<code>${code}</code>`));
       out = out.replace(/\*\*([^*\n]+)\*\*/g, '<strong>$1</strong>');
-      out = out.replace(/\[([^\]]+)\]\(([^)\s]+)\)/g, (_m, label, href) => {
-        const rawHref = href.replace(/&amp;/g, '&');
-        if (/^https?:\/\/[^/]+\/(?:preview|download)\/([^?]+)/i.test(rawHref) || rawHref.startsWith('/preview/')) {
-          const mPrev = /\/(?:preview|download)\/([^?]+)/i.exec(rawHref);
-          const relPath = mPrev ? decodeURIComponent(mPrev[1]) : '';
-          return `<a href="#" class="ws-preview-link" data-rel="${escHtml(relPath)}">${label}</a>`;
-        }
-        if (/^https?:\/\//i.test(rawHref)) {
-          return `<a href="${escHtml(rawHref)}" target="_blank" rel="noopener noreferrer">${label}</a>`;
-        }
-        return `<a href="#" class="ws-preview-link" data-rel="${escHtml(rawHref)}">${label}</a>`;
+      out = out.replace(/\[([^\]]+)\]\(((?:[^()\n]|\([^()\n]*\))+)\)/g, (_m, label, href) => {
+        return stash(renderResolvedLinkHtml(label, href));
       });
-      return out;
+      out = out.replace(/((?:file:\/\/\/|https?:\/\/)[^\s\x00]+)/gi, (full) => {
+        let candidate = full;
+        let suffix = '';
+        while (candidate) {
+          const entM = /(&(?:lt|gt|quot|#39);)$/.exec(candidate);
+          if (entM) {
+            suffix = entM[1] + suffix;
+            candidate = candidate.slice(0, -entM[1].length);
+            continue;
+          }
+          const ch = candidate[candidate.length - 1];
+          if (/[.,;:!?。，；：！？、]/.test(ch)) {
+            suffix = ch + suffix;
+            candidate = candidate.slice(0, -1);
+            continue;
+          }
+          if (ch === ')' && (candidate.match(/\(/g) || []).length < (candidate.match(/\)/g) || []).length) {
+            suffix = ch + suffix;
+            candidate = candidate.slice(0, -1);
+            continue;
+          }
+          break;
+        }
+        if (!candidate) return full;
+        return stash(renderResolvedLinkHtml(candidate, candidate)) + suffix;
+      });
+      return out.replace(/\x00INL(\d+)\x00/g, (_m, idx) => inlines[Number(idx)] || '');
     };
 
     const lines = text.split('\n');
@@ -283,8 +522,13 @@
 
   function connectWs(forceEngineId) {
     const targetEngine = forceEngineId || getEffectiveEngineId();
-    if (ws && (ws.readyState === WebSocket.OPEN || ws.readyState === WebSocket.CONNECTING)) {
-      if (acpLiveEngineId === targetEngine) return Promise.resolve();
+    if (ws && ws.readyState === WebSocket.OPEN && acpLiveEngineId === targetEngine && state.wsReady) {
+      return Promise.resolve();
+    }
+    if (connectPromise && connectTargetEngine === targetEngine) {
+      return connectPromise;
+    }
+    if (ws && (ws.readyState === WebSocket.OPEN || ws.readyState === WebSocket.CONNECTING) && acpLiveEngineId !== targetEngine) {
       suppressReconnectOnce = true;
       try { ws.close(); } catch {}
       ws = null;
@@ -292,30 +536,69 @@
       state.wsReady = false;
       acpLiveSessionId = null;
       acpLiveCwd = null;
+      loadedAcpSessions.clear();
+      loadingAcpSessions.clear();
     }
-    return new Promise((resolve, reject) => {
+
+    connectTargetEngine = targetEngine;
+    connectPromise = new Promise((resolve, reject) => {
+      const myGen = ++wsGen;
       acpLiveEngineId = targetEngine;
       setWsBadge('warn', `连接 ${getEngineBadgeName(targetEngine)} ACP...`);
       const proto = location.protocol === 'https:' ? 'wss://' : 'ws://';
       const socket = new WebSocket(`${proto}${location.host}/agent?cid=${encodeURIComponent(state.clientId)}&engine=${encodeURIComponent(targetEngine)}`);
       ws = socket;
       let initDone = false;
+      let settled = false;
+      let freshInitStarted = false;
+      let fallbackTimer = null;
 
-      socket.onopen = async () => {
-        state.wsConnected = true;
+      const finishConnect = (ok, err) => {
+        if (settled) return;
+        settled = true;
+        if (connectTargetEngine === targetEngine) connectPromise = null;
+        if (ok) resolve();
+        else reject(err || new Error('WS connect failed'));
+      };
+
+      const triggerFreshInit = async () => {
+        if (freshInitStarted || ws !== socket || socket.readyState !== WebSocket.OPEN) return;
+        freshInitStarted = true;
+        // Brand-new backend child process cannot answer RPCs from an earlier closed process
+        for (const [id, p] of Array.from(pendingRpc.entries())) {
+          if (p.wsGen !== myGen) {
+            pendingRpc.delete(id);
+            if (p.timer) clearTimeout(p.timer);
+            p.reject(new Error('后台进程已重启，未收到响应（请检查文件变动或重试）'));
+          }
+        }
+        if (disconnectGraceTimer) { clearTimeout(disconnectGraceTimer); disconnectGraceTimer = null; }
+        loadedAcpSessions.clear();
+        loadingAcpSessions.clear();
+        acpLiveSessionId = null;
         try {
           await sendRpc('initialize', {
             protocolVersion: 1,
             clientCapabilities: { terminal: false, fs: { readTextFile: false, writeTextFile: false } },
           }, 25000);
+          if (ws !== socket) { finishConnect(false, new Error('WS superseded')); return; }
           state.wsReady = true;
           initDone = true;
           setWsBadge('ok', `${getEngineBadgeName(targetEngine)} ACP 就绪`);
-          resolve();
+          finishConnect(true);
         } catch (e) {
           setWsBadge('err', '初始化失败');
-          reject(e);
+          finishConnect(false, e);
         }
+      };
+
+      socket.onopen = () => {
+        if (ws !== socket) return;
+        state.wsConnected = true;
+        // Wait briefly for --persist server banner ('reconnect' vs 'connected') before calling initialize
+        fallbackTimer = setTimeout(() => {
+          triggerFreshInit();
+        }, 350);
       };
 
       socket.onmessage = (ev) => {
@@ -325,28 +608,65 @@
           if (!t) continue;
           let msg;
           try { msg = JSON.parse(t); } catch { continue; }
-          if (msg.type === 'connected' || msg.type === 'reconnect') continue;
+          if (msg.type === 'reconnect') {
+            clearTimeout(fallbackTimer);
+            if (disconnectGraceTimer) { clearTimeout(disconnectGraceTimer); disconnectGraceTimer = null; }
+            state.wsReady = true;
+            initDone = true;
+            for (const [, entry] of busySessions) entry.disconnectedWhileBusy = false;
+            setWsBadge('ok', `${getEngineBadgeName(targetEngine)} ACP 就绪`);
+            renderLiveBannerInPlace(getActiveSession());
+            finishConnect(true);
+            continue;
+          }
+          if (msg.type === 'connected') {
+            clearTimeout(fallbackTimer);
+            triggerFreshInit();
+            continue;
+          }
           handleRpcMessage(msg);
         }
       };
 
       socket.onclose = () => {
+        clearTimeout(fallbackTimer);
         if (ws === socket) ws = null;
         state.wsConnected = false;
         state.wsReady = false;
-        acpLiveSessionId = null;
         const wasSuppressed = suppressReconnectOnce;
         suppressReconnectOnce = false;
-        for (const [id, p] of pendingRpc) {
-          clearTimeout(p.timer);
-          p.reject(new Error('WebSocket disconnected'));
+
+        let keptInfiniteCount = 0;
+        for (const [id, p] of Array.from(pendingRpc.entries())) {
+          if (wasSuppressed || p.finite) {
+            pendingRpc.delete(id);
+            if (p.timer) clearTimeout(p.timer);
+            p.reject(new Error('WebSocket disconnected'));
+          } else {
+            keptInfiniteCount++;
+          }
         }
-        pendingRpc.clear();
-        if (!initDone) reject(new Error('WS closed before init'));
+
+        if (keptInfiniteCount > 0) {
+          for (const [, entry] of busySessions) entry.disconnectedWhileBusy = true;
+          renderLiveBannerInPlace(getActiveSession());
+          if (disconnectGraceTimer) clearTimeout(disconnectGraceTimer);
+          disconnectGraceTimer = setTimeout(() => {
+            disconnectGraceTimer = null;
+            for (const [id, p] of Array.from(pendingRpc.entries())) {
+              if (!p.finite) {
+                pendingRpc.delete(id);
+                p.reject(new Error('WebSocket reconnect timeout (35s)'));
+              }
+            }
+          }, 35000);
+        }
+
+        if (!initDone) finishConnect(false, new Error('WS closed before init'));
         if (!wasSuppressed) {
-          setWsBadge('warn', '已断开，重连中...');
+          setWsBadge('warn', keptInfiniteCount > 0 ? '网络波动重连中...' : '已断开，重连中...');
           clearTimeout(reconnectTimer);
-          reconnectTimer = setTimeout(() => { connectWs().catch(() => {}); }, 2500);
+          reconnectTimer = setTimeout(() => { connectWs().catch(() => {}); }, 1200);
         }
       };
 
@@ -354,6 +674,7 @@
         setWsBadge('err', '连接异常');
       };
     });
+    return connectPromise;
   }
 
   function sendRpc(method, params, timeoutMs = 30000) {
@@ -361,12 +682,13 @@
       return Promise.reject(new Error('WebSocket not open'));
     }
     const id = rpcSeq++;
+    const finite = timeoutMs > 0;
     return new Promise((resolve, reject) => {
-      const timer = timeoutMs > 0 ? setTimeout(() => {
+      const timer = finite ? setTimeout(() => {
         pendingRpc.delete(id);
         reject(new Error('RPC timeout: ' + method));
       }, timeoutMs) : null;
-      pendingRpc.set(id, { resolve, reject, timer });
+      pendingRpc.set(id, { resolve, reject, timer, finite, wsGen });
       ws.send(JSON.stringify({ jsonrpc: '2.0', id, method, params }) + '\n');
     });
   }
@@ -402,7 +724,8 @@
   }
 
   function findSessionForAcpId(sid) {
-    return state.sessions.find(s => s.acpSessionId === sid || s.id === sid) || getActiveSession();
+    if (sid) return state.sessions.find(s => s.acpSessionId === sid || s.id === sid) || null;
+    return getActiveSession();
   }
 
   function getLastAssistantMsg(sess) {
@@ -413,15 +736,32 @@
     return null;
   }
 
+  function extractCommandMeta(tc) {
+    const args = (tc && tc.args && typeof tc.args === 'object') ? tc.args : null;
+    const rawCmd = args ? String(args.CommandLine || args.command || args.cmd || '').trim() : '';
+    const summary = args ? String(args.toolSummary || args.Description || '').trim() : '';
+    const nameStr = String((tc && (tc.name || tc.title)) || '');
+    const isShell = Boolean(rawCmd || /run_command|execute|shell|bash|powershell|cmd/i.test(nameStr));
+    let label = (tc && (tc.title || tc.name)) || 'tool';
+    if (summary && rawCmd) {
+      const shortCmd = rawCmd.replace(/\s+/g, ' ').slice(0, 88);
+      label = `${summary} · ${shortCmd}`;
+    } else if (rawCmd) {
+      label = rawCmd.replace(/\s+/g, ' ').slice(0, 110);
+    }
+    return { label, summary, rawCmd, isShell };
+  }
+
   function handleSessionUpdate(params) {
-    const sess = findSessionForAcpId(params.sessionId);
+    const sid = params.sessionId;
+    const sess = findSessionForAcpId(sid);
     const upd = params.update;
     if (!upd) return;
 
     if (upd.sessionUpdate === 'usage_update') {
       const used = Number(upd.used || 0);
       const size = Number(upd.size || 0);
-      if (size > 0) {
+      if (size > 0 && (!sess || sess.id === state.activeSessionId)) {
         const pct = Math.min(100, Math.round((used / size) * 100));
         const pill = $('usage-pill');
         if (pill) {
@@ -432,7 +772,21 @@
       return;
     }
 
-    if (upd.sessionUpdate === 'session_info_update' && upd.title && sess) {
+    if (upd.sessionUpdate === 'current_mode_update' && upd.currentModeId) {
+      if (!sess || sess.id === state.activeSessionId) {
+        state.currentModeId = upd.currentModeId;
+        renderModeButton();
+      }
+      if (sess) sess.modeId = upd.currentModeId;
+      return;
+    }
+
+    // Drop history replay frames triggered while session/load is hydrating the backend
+    if (sid && loadingAcpSessions.has(sid)) return;
+
+    if (!sess) return;
+
+    if (upd.sessionUpdate === 'session_info_update' && upd.title) {
       sess.title = upd.title;
       renderSidebar();
       renderTabs();
@@ -440,51 +794,81 @@
       return;
     }
 
-    if (upd.sessionUpdate === 'current_mode_update' && upd.currentModeId) {
-      state.currentModeId = upd.currentModeId;
-      if (sess) sess.modeId = upd.currentModeId;
-      renderModeButton();
-      return;
-    }
-
-    if (!sess) return;
     const last = getLastAssistantMsg(sess);
+    // Strict turn guard: never append or duplicate onto an already completed turn
+    if (!last || last._done === true) return;
+
+    // Auto-resume busy indicator if a page refresh/reconnect receives live tailing chunks
+    if (!isSessionBusy(sess.id)) {
+      setSessionBusy(sess, true, {
+        phase: '已恢复实时输出流...',
+        acpSessionId: sid || sess.acpSessionId || '',
+      });
+    }
+    if (sid) loadedAcpSessions.add(sid);
 
     if (upd.sessionUpdate === 'agent_thought_chunk') {
-      if (last && upd.content && upd.content.text) {
+      if (upd.content && upd.content.text) {
         last.thought = (last.thought || '') + upd.content.text;
-        updateStreamingDom(sess);
+        touchSessionBusy(sess, { phase: '模型推理中 (Thought)...' });
+        if (sess.id === state.activeSessionId) updateStreamingDom(sess);
+        scheduleSaveSession(sess);
       }
       return;
     }
 
     if (upd.sessionUpdate === 'agent_message_chunk') {
-      if (last && upd.content && upd.content.text) {
+      if (upd.content && upd.content.text) {
         last.text = (last.text || '') + upd.content.text;
-        updateStreamingDom(sess);
+        touchSessionBusy(sess, { phase: '正在输出回复...' });
+        if (sess.id === state.activeSessionId) updateStreamingDom(sess);
+        scheduleSaveSession(sess);
       }
       return;
     }
 
     if (upd.sessionUpdate === 'tool_call' || upd.sessionUpdate === 'tool_call_update') {
-      if (!last) return;
       if (!Array.isArray(last.tools)) last.tools = [];
       const tid = upd.toolCallId || ('tool-' + last.tools.length);
       let tc = last.tools.find(t => t.id === tid);
       if (!tc) {
-        tc = { id: tid, name: upd.name || upd.kind || 'tool', title: upd.title || upd.name || 'tool', status: upd.status || 'in_progress', args: upd.args || upd.rawInput, output: '' };
+        tc = {
+          id: tid,
+          name: upd.name || upd.kind || 'tool',
+          title: upd.title || upd.name || 'tool',
+          status: upd.status || 'in_progress',
+          args: upd.args || upd.rawInput,
+          output: '',
+          startedAt: Date.now(),
+        };
         last.tools.push(tc);
       }
       if (upd.name) tc.name = upd.name;
       if (upd.title) tc.title = upd.title;
-      if (upd.status) tc.status = upd.status;
+      if (upd.status) {
+        tc.status = upd.status;
+        if (upd.status === 'completed' || upd.status === 'failed') {
+          tc.endedAt = tc.endedAt || Date.now();
+        }
+      }
       if (upd.args || upd.rawInput) tc.args = upd.args || upd.rawInput;
       if (upd.rawOutput && upd.rawOutput.output !== undefined) tc.output = String(upd.rawOutput.output);
       else if (Array.isArray(upd.content) && upd.content.length > 0) {
         const txtParts = upd.content.map(c => (c.content && c.content.text) ? c.content.text : '').filter(Boolean);
         if (txtParts.length) tc.output = txtParts.join('\n');
       }
-      renderChat();
+      const meta = extractCommandMeta(tc);
+      if (tc.status === 'in_progress') {
+        touchSessionBusy(sess, {
+          phase: meta.isShell ? `正在执行命令: ${meta.summary || meta.rawCmd || tc.name}` : `正在调用工具: ${meta.label}`,
+          toolName: tc.name,
+        });
+        if (meta.isShell) pollRuntimeStatusOnce();
+      } else {
+        touchSessionBusy(sess, { phase: `工具已完成 (${tc.name})，等待下一步...` });
+      }
+      if (sess.id === state.activeSessionId) renderChat();
+      scheduleSaveSession(sess);
       return;
     }
   }
@@ -499,9 +883,9 @@
       return;
     }
 
-    const sess = getActiveSession();
+    const sess = findSessionForAcpId(params.sessionId) || getActiveSession();
     const last = getLastAssistantMsg(sess);
-    if (!last) {
+    if (!last || last._done === true) {
       if (allowOpt) sendRpcResponse(msg.id, { outcome: { outcome: 'selected', optionId: allowOpt.optionId } });
       return;
     }
@@ -512,29 +896,34 @@
       options,
       resolved: null,
     });
-    renderChat();
+    if (sess.id === state.activeSessionId) renderChat();
   }
 
-  async function ensureActiveAcpSession() {
-    const sess = getActiveSession();
+  async function ensureActiveAcpSession(targetSess = getActiveSession()) {
+    const sess = targetSess;
     if (!sess) throw new Error('No active session');
     const targetEngine = getEffectiveEngineId(sess);
     if (!sess.engineId) sess.engineId = targetEngine;
     await connectWs(targetEngine);
     const targetCwd = cwdForSubdir(sess.subdir || '');
 
-    if (acpLiveSessionId && sess.acpSessionId === acpLiveSessionId && acpLiveCwd === targetCwd && acpLiveEngineId === targetEngine) {
-      return acpLiveSessionId;
+    if (sess.acpSessionId && loadedAcpSessions.has(sess.acpSessionId) && acpLiveCwd === targetCwd && acpLiveEngineId === targetEngine) {
+      acpLiveSessionId = sess.acpSessionId;
+      return sess.acpSessionId;
     }
 
-    // Try session/load if we already have an ACP session ID from earlier
+    // Try session/load if we already have an ACP session ID from earlier (guarding replay chunks)
     let result = null;
     if (sess.acpSessionId) {
+      loadingAcpSessions.add(sess.acpSessionId);
       try {
         result = await sendRpc('session/load', { sessionId: sess.acpSessionId, cwd: targetCwd, mcpServers: [] }, 15000);
         acpLiveSessionId = sess.acpSessionId;
+        loadedAcpSessions.add(sess.acpSessionId);
       } catch {
         result = null;
+      } finally {
+        loadingAcpSessions.delete(sess.acpSessionId);
       }
     }
 
@@ -542,6 +931,7 @@
       result = await sendRpc('session/new', { cwd: targetCwd, mcpServers: [] }, 25000);
       acpLiveSessionId = result.sessionId;
       sess.acpSessionId = result.sessionId;
+      loadedAcpSessions.add(result.sessionId);
     }
     acpLiveCwd = targetCwd;
 
@@ -605,13 +995,12 @@
     state.activeSessionId = id;
     if (!state.openTabIds.includes(id)) state.openTabIds.push(id);
     const sess = getActiveSession();
-    const prevEngine = state.currentEngineId;
     if (sess) {
       if (sess.engineId) state.currentEngineId = sess.engineId;
       if (sess.modelId) state.currentModelId = sess.modelId;
       if (sess.modeId) state.currentModeId = sess.modeId;
     }
-    const needReconnect = Boolean(sess && acpLiveEngineId && getEffectiveEngineId(sess) !== acpLiveEngineId);
+    syncActiveBusyState();
     renderSidebar();
     renderTabs();
     renderSubbar();
@@ -619,9 +1008,7 @@
     renderModelButton();
     renderModeButton();
     renderChat();
-    if ((state.wsReady || needReconnect || prevEngine !== state.currentEngineId) && sess) {
-      ensureActiveAcpSession().catch(() => {});
-    }
+    // Never send session/load merely when switching tabs — prevents cancelling background turns!
   }
 
   function renderSidebar() {
@@ -776,17 +1163,104 @@
   }
 
   // ---------- Chat Rendering & Streaming ----------
-  function renderChat() {
+  function isNearBottom(el) {
+    if (!el) return true;
+    return (el.scrollHeight - el.scrollTop - el.clientHeight) < 140;
+  }
+
+  function buildLiveBannerHtml(sess, entry) {
+    const elapsed = formatDuration(Date.now() - entry.startedAt);
+    const silentSec = Math.max(0, Math.floor((Date.now() - entry.lastEventAt) / 1000));
+    const procs = Array.isArray(entry.runtimeProcesses) ? entry.runtimeProcesses : [];
+    const liveLog = entry.liveLog;
+    const isWarn = Boolean(entry.disconnectedWhileBusy);
+    const title = entry.disconnectedWhileBusy
+      ? '⚠️ 网络闪断重连中… 服务器后台任务仍在继续执行，请勿重发消息'
+      : (entry.phase || '正在执行中...');
+
+    let procHtml = '';
+    if (procs.length > 0) {
+      procHtml = '<div class="live-proc-list">' + procs.map(p => (
+        `<div class="live-proc-row" title="${escHtml(p.cmd)}"><span>⚡</span><b>${escHtml(p.name)}</b><span>(${p.ageSec}s)</span><span>${escHtml(p.cmd)}</span></div>`
+      )).join('') + '</div>';
+    }
+
+    let logHtml = '';
+    if (liveLog && liveLog.tail) {
+      logHtml = `<div class="live-log-wrap"><div class="live-log-head"><span>实时输出 · ${escHtml(liveLog.source)}</span><span>${liveLog.size} B</span></div><pre class="live-log-tail">${escHtml(liveLog.tail)}</pre></div>`;
+    }
+
+    return `
+      <div class="live-run-head">
+        <span class="dot ${isWarn ? 'warn' : 'online'}"></span>
+        <span class="live-run-title">${escHtml(title)}</span>
+        <span class="live-run-meta">已运行 ${elapsed} · 最近活动 ${silentSec}s 前</span>
+      </div>
+      ${procHtml}
+      ${logHtml}`;
+  }
+
+  function renderLiveBannerInPlace(sess) {
+    if (!sess || sess.id !== state.activeSessionId) return;
+    const wrap = $('streaming-assistant');
+    if (!wrap) return;
+    let banner = $('live-run-banner');
+    const entry = busySessions.get(sess.id);
+    if (!entry) {
+      if (banner) banner.remove();
+      return;
+    }
+    const scrollEl = $('chat-scroll');
+    const keepScroll = isNearBottom(scrollEl);
+    if (!banner) {
+      banner = document.createElement('div');
+      banner.id = 'live-run-banner';
+      wrap.appendChild(banner);
+    }
+    banner.className = 'live-run-banner' + (entry.disconnectedWhileBusy ? ' warn' : '');
+    banner.innerHTML = buildLiveBannerHtml(sess, entry);
+    const tailEl = banner.querySelector('.live-log-tail');
+    if (tailEl) tailEl.scrollTop = tailEl.scrollHeight;
+    if (keepScroll && scrollEl) scrollEl.scrollTop = scrollEl.scrollHeight;
+  }
+
+  function updateRunningToolElapsedInPlace(sess) {
+    if (!sess || sess.id !== state.activeSessionId) return;
+    const wrap = $('streaming-assistant');
+    if (!wrap) return;
+    const last = getLastAssistantMsg(sess);
+    if (!last || !Array.isArray(last.tools)) return;
+    for (const tc of last.tools) {
+      if (tc.status !== 'in_progress' || !tc.startedAt) continue;
+      const span = wrap.querySelector(`[data-tool-elapsed="${CSS.escape(String(tc.id))}"]`);
+      if (span) span.textContent = formatDuration(Date.now() - tc.startedAt);
+    }
+  }
+
+  function bindPersistedDetails(det, key) {
+    det.addEventListener('toggle', () => {
+      if (det.open) {
+        expandedDetails.add(key);
+        expandedDetails.delete('!' + key);
+      } else {
+        expandedDetails.delete(key);
+        expandedDetails.add('!' + key);
+      }
+    });
+  }
+
+  function renderChat(forceScrollBottom = false) {
     const container = $('chat-messages');
     const scrollEl = $('chat-scroll');
     if (!container || !scrollEl) return;
+    const keepScroll = forceScrollBottom || isNearBottom(scrollEl);
     const sess = getActiveSession();
 
     if (!sess || !sess.messages || sess.messages.length === 0) {
       container.innerHTML = `
         <div class="empty-state">
-          <h2>AGY Web 工作台 · ${escHtml(state.user || '')}</h2>
-          <p>已直连服务器 AGY 模型（含 Carbon / Claude 等 27 个模型），无需再配置本地路径。</p>
+          <h2>LanCode Workbench · ${escHtml(state.user || '')}</h2>
+          <p>支持在工作台底部自由切换本地已授权的 CLI / 模型（支持目录隔离、拖拽文件夹、实时命令监控）。</p>
           <div class="empty-tips">
             <div class="tip-card"><b>拖入整个文件夹</b>直接拖进聊天框或右侧文件树，自动上传并引用。</div>
             <div class="tip-card"><b>Ctrl+V 贴截图</b>截图或图片粘贴即传，直接让 AI 看图分析。</div>
@@ -797,6 +1271,7 @@
     }
 
     container.innerHTML = '';
+    const activeBusy = isSessionBusy(sess.id);
     for (let i = 0; i < sess.messages.length; i++) {
       const m = sess.messages[i];
       if (m.role === 'user') {
@@ -831,28 +1306,43 @@
       } else {
         const wrap = document.createElement('div');
         wrap.className = 'msg-assistant';
-        if (i === sess.messages.length - 1) wrap.id = 'streaming-assistant';
+        const isLast = (i === sess.messages.length - 1);
+        if (isLast) wrap.id = 'streaming-assistant';
 
         if (m.thought) {
+          const thKey = `thought:${sess.id}:${i}`;
           const det = document.createElement('details');
           det.className = 'thought-box';
+          if (expandedDetails.has(thKey)) det.open = true;
+          bindPersistedDetails(det, thKey);
           det.innerHTML = `<summary>思考过程</summary><div class="thought-body">${escHtml(m.thought)}</div>`;
           wrap.appendChild(det);
         }
 
         if (Array.isArray(m.tools)) {
           for (const tc of m.tools) {
+            const tKey = `tool:${tc.id}`;
+            const meta = extractCommandMeta(tc);
+            const isRun = tc.status === 'in_progress';
             const det = document.createElement('details');
-            det.className = 'tool-card';
+            det.className = 'tool-card' + (isRun ? ' is-running' : '');
+            if (expandedDetails.has(tKey) || (isRun && meta.isShell && !expandedDetails.has('!' + tKey))) {
+              det.open = true;
+            }
+            bindPersistedDetails(det, tKey);
             const stCls = tc.status === 'completed' ? 'done' : (tc.status === 'failed' ? 'err' : 'run');
             const stIcon = tc.status === 'completed' ? '✓' : (tc.status === 'failed' ? '✕' : '⋯');
-            const argsStr = tc.args ? JSON.stringify(tc.args, null, 2) : '';
+            const elapsedTxt = (isRun && tc.startedAt)
+              ? formatDuration(Date.now() - tc.startedAt)
+              : ((tc.endedAt && tc.startedAt) ? formatDuration(tc.endedAt - tc.startedAt) : '');
+            const argsStr = meta.rawCmd || (tc.args ? JSON.stringify(tc.args, null, 2) : '');
             det.innerHTML = `
               <summary>
                 <span class="tool-status ${stCls}">${stIcon}</span>
-                <span class="tool-title">${escHtml(tc.title || tc.name)}</span>
+                <span class="tool-title">${escHtml(meta.label)}</span>
+                ${elapsedTxt ? `<span class="tool-elapsed" data-tool-elapsed="${escHtml(tc.id)}">${elapsedTxt}</span>` : ''}
               </summary>
-              <div class="tool-body">${escHtml(argsStr)}${tc.output ? ('\n\n--- 输出 ---\n' + escHtml(tc.output)) : ''}</div>`;
+              <div class="tool-body">${escHtml(argsStr)}${tc.output ? ('\n\n--- 输出 ---\n' + escHtml(tc.output)) : (isRun ? '\n\n(命令正在后台运行，等待返回结果...)' : '')}</div>`;
             wrap.appendChild(det);
           }
         }
@@ -887,7 +1377,7 @@
 
         const prose = document.createElement('div');
         prose.className = 'prose';
-        prose.innerHTML = m.text ? renderMarkdown(m.text) : (state.busy && i === sess.messages.length - 1 ? '<span style="color:var(--text-muted)">正在思考…</span>' : '');
+        prose.innerHTML = m.text ? renderMarkdown(m.text) : (activeBusy && isLast ? '<span style="color:var(--text-muted)">正在思考…</span>' : '');
         wrap.appendChild(prose);
 
         if (m.error) {
@@ -900,36 +1390,43 @@
         container.appendChild(wrap);
       }
     }
-    scrollEl.scrollTop = scrollEl.scrollHeight;
+    if (activeBusy) renderLiveBannerInPlace(sess);
+    if (keepScroll) scrollEl.scrollTop = scrollEl.scrollHeight;
   }
 
   function updateStreamingDom(sess) {
     const wrap = $('streaming-assistant');
     const last = getLastAssistantMsg(sess);
     if (!wrap || !last) { renderChat(); return; }
+    const scrollEl = $('chat-scroll');
+    const keepScroll = isNearBottom(scrollEl);
     let prose = wrap.querySelector('.prose');
     if (prose) prose.innerHTML = last.text ? renderMarkdown(last.text) : '<span style="color:var(--text-muted)">正在生成…</span>';
     if (last.thought) {
       let det = wrap.querySelector('.thought-box');
       if (!det) {
+        const msgIdx = Math.max(0, sess.messages.length - 1);
+        const thKey = `thought:${sess.id}:${msgIdx}`;
         det = document.createElement('details');
         det.className = 'thought-box';
+        if (expandedDetails.has(thKey)) det.open = true;
+        bindPersistedDetails(det, thKey);
         det.innerHTML = `<summary>思考过程</summary><div class="thought-body"></div>`;
         wrap.insertBefore(det, prose);
       }
       det.querySelector('.thought-body').textContent = last.thought;
     }
-    const scrollEl = $('chat-scroll');
-    if (scrollEl) scrollEl.scrollTop = scrollEl.scrollHeight;
+    renderLiveBannerInPlace(sess);
+    if (keepScroll && scrollEl) scrollEl.scrollTop = scrollEl.scrollHeight;
   }
 
   // ---------- Send Prompt & Stop ----------
   async function sendPrompt() {
     const input = $('composer-input');
     const rawText = (input.value || '').trim();
-    if ((!rawText && state.attachments.length === 0) || state.busy) return;
-
     let sess = getActiveSession();
+    if ((!rawText && state.attachments.length === 0) || (sess && isSessionBusy(sess.id))) return;
+
     if (!sess) sess = createLocalSession('');
 
     const atts = state.attachments.slice();
@@ -943,21 +1440,24 @@
       text: rawText || '(仅附件)',
       attachments: atts.map(a => ({ label: a.label, relPath: a.relPath, isImage: a.isImage, isFolder: a.isFolder })),
     };
-    const asstMsg = { role: 'assistant', text: '', thought: '', tools: [], permissions: [] };
+    const asstMsg = { role: 'assistant', text: '', thought: '', tools: [], permissions: [], _done: false };
     sess.messages.push(uiMsg, asstMsg);
     if (sess.title === '新对话' || sess.title.endsWith(' · 新对话')) {
       const hintTitle = (rawText || (atts[0] && atts[0].label) || '新对话').slice(0, 28);
       sess.title = sess.subdir ? `${sess.subdir} · ${hintTitle}` : hintTitle;
     }
     sess.updatedAt = Date.now();
-    state.busy = true;
-    updateBusyUi();
+    setSessionBusy(sess, true, {
+      phase: '正在建立 ACP 会话并发送请求...',
+      acpSessionId: sess.acpSessionId || '',
+    });
     renderSidebar();
     renderTabs();
-    renderChat();
+    renderChat(true);
 
     try {
-      const sid = await ensureActiveAcpSession();
+      const sid = await ensureActiveAcpSession(sess);
+      touchSessionBusy(sess, { phase: '已提交给 Agent，等待流响应...', acpSessionId: sid });
       const blocks = [];
       const contextNotes = [];
 
@@ -984,18 +1484,21 @@
     } catch (e) {
       asstMsg.error = e.message || String(e);
     } finally {
-      state.busy = false;
+      asstMsg._done = true;
+      setSessionBusy(sess, false);
       sess.updatedAt = Date.now();
-      updateBusyUi();
-      renderChat();
+      if (sess.id === state.activeSessionId) renderChat();
       saveSessionNow(sess).catch(() => {});
       refreshTreeAndActivity();
     }
   }
 
   function stopCurrentPrompt() {
-    if (!state.busy || !acpLiveSessionId || !ws || ws.readyState !== WebSocket.OPEN) return;
-    ws.send(JSON.stringify({ jsonrpc: '2.0', method: 'session/cancel', params: { sessionId: acpLiveSessionId } }) + '\n');
+    const sess = getActiveSession();
+    const sid = (sess && sess.acpSessionId) || acpLiveSessionId;
+    if (!sess || !isSessionBusy(sess.id) || !sid || !ws || ws.readyState !== WebSocket.OPEN) return;
+    touchSessionBusy(sess, { phase: '正在停止当前运行...' });
+    ws.send(JSON.stringify({ jsonrpc: '2.0', method: 'session/cancel', params: { sessionId: sid } }) + '\n');
   }
 
   function updateBusyUi() {
@@ -1013,6 +1516,7 @@
 
   function toggleEngineMenu() {
     const menu = $('engine-menu');
+    if (!menu) return;
     $('model-menu').hidden = true;
     $('mode-menu').hidden = true;
     if (!menu.hidden) { menu.hidden = true; return; }
@@ -1040,8 +1544,8 @@
           showToast(`${eng.name} 暂未安装：${eng.hint || ''}`, 3600);
           return;
         }
-        if (state.busy) {
-          showToast('当前任务仍在运行，请先停止后再切换引擎', 2500);
+        if (isAnySessionBusy()) {
+          showToast('当前仍有任务正在运行，请等待完成后再切换引擎', 2800);
           return;
         }
         if (eng.id === activeEid && state.wsReady) return;
@@ -1060,6 +1564,8 @@
         state.currentModeId = 'default';
         acpLiveSessionId = null;
         acpLiveCwd = null;
+        loadedAcpSessions.clear();
+        loadingAcpSessions.clear();
         renderEngineButton();
         renderModelButton();
         renderModeButton();
@@ -1103,7 +1609,7 @@
     const btn = $('btn-model-pick');
     if (!btn) return;
     const found = state.models.find(m => (m.modelId || m.id) === state.currentModelId);
-    btn.textContent = '模型: ' + (found ? found.name : (state.currentModelId || '连接中')) + ' ▾';
+    btn.textContent = '模型: ' + (found ? found.name : (state.currentModelId || '自动 / 点击选模型')) + ' ▾';
   }
 
   function renderModeButton() {
@@ -1116,7 +1622,8 @@
   function toggleModelMenu() {
     const menu = $('model-menu');
     $('mode-menu').hidden = true;
-    $('engine-menu').hidden = true;
+    const em = $('engine-menu');
+    if (em) em.hidden = true;
     if (!menu.hidden) { menu.hidden = true; return; }
     if (state.models.length === 0) {
       ensureActiveAcpSession().then(() => { renderModelMenuItems(); menu.hidden = false; }).catch(() => {});
@@ -1158,7 +1665,8 @@
   function toggleModeMenu() {
     const menu = $('mode-menu');
     $('model-menu').hidden = true;
-    $('engine-menu').hidden = true;
+    const em = $('engine-menu');
+    if (em) em.hidden = true;
     if (!menu.hidden) { menu.hidden = true; return; }
     const modes = state.modes.length ? state.modes : [
       { id: 'default', name: 'Default' },
@@ -1457,21 +1965,56 @@
     }
   }
 
-  async function openPreview(relPath) {
-    state.selectedFilePath = relPath;
+  function expandAncestorsFor(relPath) {
+    const parts = String(relPath || '').split('/').filter(Boolean);
+    for (let i = 1; i < parts.length; i++) {
+      state.expandedDirs.add(parts.slice(0, i).join('/'));
+    }
+  }
+
+  async function openPreview(relPath, opts = {}) {
+    const cleanRel = String(relPath ?? '').replace(/\\/g, '/').replace(/^\/+|\/+$/g, '');
+    state.selectedFilePath = cleanRel;
+    expandAncestorsFor(cleanRel);
     renderTree();
-    $('preview-title').textContent = relPath;
+    $('preview-title').textContent = cleanRel || '(工作区根目录)';
     const rawBtn = $('preview-raw');
     const dlBtn = $('preview-dl');
     const body = $('preview-body');
     body.innerHTML = '<div style="color:var(--text-muted);padding:16px">加载中...</div>';
 
     try {
-      const d = await apiJson('/api/file?path=' + encodeURIComponent(relPath));
+      const d = await apiJson('/api/file?path=' + encodeURIComponent(cleanRel));
       rawBtn.href = d.previewUrl; rawBtn.hidden = false;
-      dlBtn.href = d.downloadUrl; dlBtn.hidden = false;
+      dlBtn.href = d.zipUrl || d.downloadUrl;
+      dlBtn.textContent = d.kind === 'directory' ? '下载 .zip' : '下载';
+      dlBtn.hidden = false;
 
-      if (d.kind === 'image') {
+      if (d.kind === 'directory') {
+        if (d.path) state.expandedDirs.add(d.path);
+        renderTree();
+        if (opts.fromChatLink) {
+          triggerBrowserDownload(d.zipUrl || d.downloadUrl);
+          showToast('📦 正在打包下载文件夹: ' + d.name + '.zip', 2800);
+        }
+        const itemsHtml = (d.items || []).map(it => {
+          const icon = it.type === 'dir' ? '📁' : '📄';
+          return `<div class="dir-preview-row" data-path="${escHtml(it.path)}"><span>${icon}</span><span class="dir-preview-name">${escHtml(it.name)}</span>${it.sizeHuman ? `<span class="dir-preview-size">${escHtml(it.sizeHuman)}</span>` : ''}<a href="${escHtml(it.downloadUrl)}" class="ws-dl-chip" title="下载">⬇</a></div>`;
+        }).join('');
+        body.innerHTML = `
+          <div class="dir-preview-card">
+            <div class="dir-preview-head">
+              <div>
+                <div class="dir-preview-title">📁 ${escHtml(d.name)}</div>
+                <div class="dir-preview-sub">共 ${Number(d.itemCount || 0)} 个子项${(d.items && d.itemCount > d.items.length) ? '（仅展示前 ' + d.items.length + ' 项）' : ''}</div>
+              </div>
+              <div class="dir-preview-actions">
+                <a class="btn btn-primary" href="${escHtml(d.zipUrl || d.downloadUrl)}">📦 打包下载整个文件夹 (.zip)</a>
+              </div>
+            </div>
+            <div class="dir-preview-list">${itemsHtml || '<div style="padding:10px 0;color:var(--text-muted);font-size:12px">空文件夹</div>'}</div>
+          </div>`;
+      } else if (d.kind === 'image') {
         body.innerHTML = `<img class="preview-img" src="${escHtml(d.previewUrl)}?_=${Date.now()}" alt="${escHtml(d.name)}" />`;
       } else if (d.kind === 'html') {
         body.innerHTML = `<iframe class="preview-frame" sandbox="allow-scripts" src="${escHtml(d.previewUrl)}"></iframe>`;
@@ -1487,7 +2030,18 @@
         const note = d.truncated ? '\n\n... [文件过大，仅预览前 256 KB] ...' : '';
         body.innerHTML = `<pre class="preview-code">${escHtml((d.content || '') + note)}</pre>`;
       } else {
-        body.innerHTML = `<div style="padding:20px;color:var(--text-secondary)">二进制文件（${escHtml(d.sizeHuman)}），请点击右上角「下载」。</div>`;
+        if (opts.fromChatLink) {
+          triggerBrowserDownload(d.downloadUrl);
+          showToast('⬇️ 正在下载文件: ' + d.name, 2400);
+        }
+        body.innerHTML = `
+          <div class="binary-preview-card">
+            <div class="dir-preview-title">📄 ${escHtml(d.name)}</div>
+            <div class="dir-preview-sub">二进制/非纯文本文件（大小 ${escHtml(d.sizeHuman)}）暂不支持直接内嵌预览，可直接下载打开。</div>
+            <div class="dir-preview-actions">
+              <a class="btn btn-primary" href="${escHtml(d.downloadUrl)}">⬇️ 直接下载 ${escHtml(d.name)} (${escHtml(d.sizeHuman)})</a>
+            </div>
+          </div>`;
       }
     } catch (e) {
       rawBtn.hidden = true; dlBtn.hidden = true;
@@ -1651,11 +2205,13 @@
       localStorage.setItem('agy_auto_allow', state.autoAllow ? '1' : '0');
     };
 
-    $('btn-engine-pick').onclick = (e) => { e.stopPropagation(); toggleEngineMenu(); };
+    const engBtn = $('btn-engine-pick');
+    if (engBtn) engBtn.onclick = (e) => { e.stopPropagation(); toggleEngineMenu(); };
     $('btn-model-pick').onclick = (e) => { e.stopPropagation(); toggleModelMenu(); };
     $('btn-mode-pick').onclick = (e) => { e.stopPropagation(); toggleModeMenu(); };
     document.addEventListener('click', () => {
-      $('engine-menu').hidden = true;
+      const engMenu = $('engine-menu');
+      if (engMenu) engMenu.hidden = true;
       $('model-menu').hidden = true;
       $('mode-menu').hidden = true;
     });
@@ -1757,10 +2313,59 @@
       const prevLink = e.target.closest('.ws-preview-link');
       if (prevLink) {
         e.preventDefault();
-        const rel = prevLink.dataset.rel || '';
-        if (rel) openPreview(rel);
+        const rel = prevLink.dataset.rel ?? '';
+        openPreview(rel, { fromChatLink: Boolean(prevLink.closest('#chat-messages')) });
+        return;
+      }
+      const dirRow = e.target.closest('.dir-preview-row');
+      if (dirRow && !e.target.closest('a')) {
+        const rel = dirRow.dataset.path ?? '';
+        openPreview(rel, { fromChatLink: false });
       }
     });
+  }
+
+  function ensureHotUpdateButton() {
+    let btn = $('btn-hot-update');
+    if (!btn) {
+      const subbar = document.querySelector('.session-subbar');
+      const usagePill = $('usage-pill');
+      if (subbar) {
+        btn = document.createElement('button');
+        btn.id = 'btn-hot-update';
+        btn.className = 'hot-update-btn';
+        btn.hidden = true;
+        if (usagePill) subbar.insertBefore(btn, usagePill);
+        else subbar.appendChild(btn);
+      }
+    }
+    if (btn) {
+      btn.onclick = () => {
+        if (isAnySessionBusy()) {
+          showToast('当前仍有任务正在运行，完成后即可点此无损刷新', 3000);
+          return;
+        }
+        location.reload();
+      };
+    }
+  }
+
+  async function checkUiVersionUpdate() {
+    try {
+      const data = await apiJson('/api/ui-version');
+      if (data && data.version) {
+        if (!initialUiVersion) {
+          initialUiVersion = data.version;
+        } else if (data.version !== initialUiVersion) {
+          ensureHotUpdateButton();
+          const btn = $('btn-hot-update');
+          if (btn) {
+            btn.hidden = false;
+            refreshHotUpdateBtnLabel();
+          }
+        }
+      }
+    } catch {}
   }
 
   // ---------- Boot ----------
@@ -1768,6 +2373,7 @@
     initTheme();
     initResizers();
     bindEvents();
+    ensureHotUpdateButton();
 
     try {
       const [me, treeRes, sessRes, actRes] = await Promise.all([
@@ -1780,7 +2386,7 @@
       state.root = me.root;
       state.syncthing = me.syncthing;
       state.engines = me.engines || [];
-      state.defaultEngine = me.defaultEngine || 'codex';
+      state.defaultEngine = me.defaultEngine || (state.engines.length ? 'codex' : 'agy');
       const prefEng = state.engines.find(e => e.id === state.currentEngineId && e.available);
       if (!prefEng) state.currentEngineId = state.defaultEngine;
       state.tree = treeRes.tree || [];
@@ -1809,9 +2415,15 @@
       renderActivityList();
       startSse();
       setInterval(() => refreshTreeAndActivity(), 15000);
+      checkUiVersionUpdate();
+      setInterval(() => checkUiVersionUpdate(), 30000);
 
       await connectWs();
-      await ensureActiveAcpSession();
+      // Do not eagerly fire session/load on historical sessions during boot (avoids aborting active backend turns)
+      const activeSess = getActiveSession();
+      if (activeSess && !activeSess.acpSessionId && state.models.length === 0) {
+        await ensureActiveAcpSession(activeSess).catch(() => {});
+      }
     } catch (e) {
       setWsBadge('err', '启动异常: ' + (e.message || e));
     }

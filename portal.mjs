@@ -7,7 +7,7 @@ import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
 import crypto from 'node:crypto';
-import { spawn } from 'node:child_process';
+import { spawn, execFile } from 'node:child_process';
 import { fileURLToPath } from 'node:url';
 import WebSocket, { WebSocketServer } from 'ws';
 import { detectEngines, attachEngineSession, shutdownAllEngines } from './tools/acp-engines.mjs';
@@ -492,13 +492,23 @@ function serveFile(res, user, rel, download) {
   const p = safeJoin(user.root, rel);
   if (!p) { res.writeHead(400); res.end('bad path'); return; }
   let st; try { st = fs.statSync(p); } catch { res.writeHead(404); res.end('not found'); return; }
-  if (st.isDirectory()) { res.writeHead(302, { Location: `/files/${encodeURI(rel)}/` }); res.end(); return; }
+  if (st.isDirectory()) {
+    if (download) { zipFolder(res, p); return; }
+    const cleanRel = String(rel || '').replace(/\\/g, '/').replace(/^\/+|\/+$/g, '');
+    res.writeHead(302, { Location: cleanRel ? `/files/${encodeURI(cleanRel)}/` : '/files/' });
+    res.end();
+    return;
+  }
   const ext = path.extname(p).toLowerCase();
-  const inline = { '.png': 'image/png', '.jpg': 'image/jpeg', '.jpeg': 'image/jpeg', '.gif': 'image/gif', '.webp': 'image/webp', '.svg': 'image/svg+xml' }[ext];
-  const textExts = ['.txt', '.md', '.json', '.js', '.mjs', '.ts', '.html', '.css', '.py', '.log', '.csv', '.yml', '.yaml', '.toml', '.sh', '.ps1', '.bat', '.c', '.h', '.cpp', '.java', '.go', '.rs'];
+  const inline = {
+    '.png': 'image/png', '.jpg': 'image/jpeg', '.jpeg': 'image/jpeg', '.gif': 'image/gif',
+    '.webp': 'image/webp', '.svg': 'image/svg+xml', '.pdf': 'application/pdf',
+  }[ext];
+  const textExts = ['.txt', '.md', '.json', '.js', '.mjs', '.ts', '.css', '.py', '.log', '.csv', '.yml', '.yaml', '.toml', '.sh', '.ps1', '.bat', '.c', '.h', '.cpp', '.java', '.go', '.rs', '.do', '.ado', '.r', '.rmd', '.tex', '.bib'];
   const headers = { 'Content-Length': st.size };
   if (download) headers['Content-Disposition'] = `attachment; filename*=UTF-8''${encodeURIComponent(path.basename(p))}`;
   if (inline) { headers['Content-Type'] = inline; }
+  else if (!download && (ext === '.html' || ext === '.htm')) { headers['Content-Type'] = 'text/html; charset=utf-8'; }
   else if (!download && textExts.includes(ext)) { headers['Content-Type'] = 'text/plain; charset=utf-8'; }
   else { headers['Content-Type'] = 'application/octet-stream'; if (!download) headers['Content-Disposition'] = `attachment; filename*=UTF-8''${encodeURIComponent(path.basename(p))}`; }
   res.writeHead(200, headers);
@@ -510,7 +520,14 @@ function zipFolder(res, dirAbs) {
   const child = spawn('tar.exe', ['-a', '-c', '-f', tmp, '-C', path.dirname(dirAbs), path.basename(dirAbs)], { windowsHide: true });
   child.on('exit', code => {
     if (code !== 0 || !fs.existsSync(tmp)) { res.writeHead(500); res.end('zip failed'); return; }
-    res.writeHead(200, { 'Content-Type': 'application/zip', 'Content-Disposition': 'attachment; filename="workspace.zip"', 'Content-Length': fs.statSync(tmp).size });
+    const baseName = path.basename(dirAbs) || 'workspace';
+    const zipName = baseName + '.zip';
+    const asciiFallback = zipName.replace(/[^\x20-\x7E]|["\\]/g, '_') || 'folder.zip';
+    res.writeHead(200, {
+      'Content-Type': 'application/zip',
+      'Content-Disposition': `attachment; filename="${asciiFallback}"; filename*=UTF-8''${encodeURIComponent(zipName)}`,
+      'Content-Length': fs.statSync(tmp).size,
+    });
     const s = fs.createReadStream(tmp);
     s.pipe(res);
     s.on('close', () => { try { fs.unlinkSync(tmp); } catch {} });
@@ -694,14 +711,68 @@ const PREVIEW_TEXT_EXTS = new Set([
   '.txt', '.json', '.js', '.mjs', '.cjs', '.ts', '.tsx', '.jsx', '.css', '.scss',
   '.py', '.log', '.csv', '.yml', '.yaml', '.toml', '.sh', '.ps1', '.bat', '.cmd',
   '.c', '.h', '.cpp', '.hpp', '.java', '.go', '.rs', '.sql', '.xml', '.ini', '.env',
+  '.do', '.ado', '.r', '.rmd', '.tex', '.bib',
   '.gitignore', '.stignore', '.svg',
 ]);
 
 function readFilePreview(user, rel) {
-  const abs = safeJoin(user.root, rel);
+  const cleanRel = String(rel || '').replace(/\\/g, '/').replace(/^\/+|\/+$/g, '');
+  const abs = safeJoin(user.root, cleanRel);
   if (!abs) return { status: 400, error: 'bad path' };
   let st;
   try { st = fs.statSync(abs); } catch { return { status: 404, error: 'not found' }; }
+
+  if (st.isDirectory()) {
+    let rawEntries = [];
+    try { rawEntries = fs.readdirSync(abs, { withFileTypes: true }); } catch {}
+    const visibleEntries = rawEntries
+      .filter(ent => {
+        if (ent.isSymbolicLink && ent.isSymbolicLink()) return false;
+        if (ent.isDirectory() && SKIP_DIRS.has(ent.name)) return false;
+        const itemRel = cleanRel ? `${cleanRel}/${ent.name}` : ent.name;
+        if (isProtectedName(itemRel)) return false;
+        return ent.isDirectory() || ent.isFile();
+      })
+      .sort((a, b) => {
+        if (a.isDirectory() !== b.isDirectory()) return a.isDirectory() ? -1 : 1;
+        return a.name.localeCompare(b.name, 'zh-CN');
+      });
+
+    const enc = cleanRel ? encodeRelPath(cleanRel) : '';
+    const zipUrl = '/zip/' + enc;
+    return {
+      status: 200,
+      data: {
+        path: cleanRel,
+        name: cleanRel ? path.basename(abs) : `${user.name} (工作区根目录)`,
+        size: 0,
+        sizeHuman: `${visibleEntries.length} 项`,
+        mtimeMs: st.mtimeMs,
+        ext: '',
+        kind: 'directory',
+        itemCount: visibleEntries.length,
+        items: visibleEntries.slice(0, 60).map(ent => {
+          const itemRel = cleanRel ? `${cleanRel}/${ent.name}` : ent.name;
+          const isDir = ent.isDirectory();
+          let itemSize = '';
+          if (!isDir) {
+            try { itemSize = human(fs.statSync(path.join(abs, ent.name)).size); } catch {}
+          }
+          return {
+            name: ent.name,
+            path: itemRel,
+            type: isDir ? 'dir' : 'file',
+            sizeHuman: itemSize,
+            downloadUrl: (isDir ? '/zip/' : '/download/') + encodeRelPath(itemRel),
+          };
+        }),
+        previewUrl: '/files/' + enc,
+        downloadUrl: zipUrl,
+        zipUrl,
+      },
+    };
+  }
+
   if (!st.isFile()) return { status: 400, error: 'not a file' };
 
   const ext = path.extname(abs).toLowerCase();
@@ -775,6 +846,149 @@ function writeSessions(userName, sessions) {
   fs.writeFileSync(tmp, JSON.stringify({ sessions: trimmed }, null, 2), 'utf8');
   fs.renameSync(tmp, f);
   return trimmed;
+}
+
+function getUiVersion() {
+  let maxMtime = 0;
+  for (const rel of ['workbench.html', 'workbench.css', 'workbench.js']) {
+    try {
+      const st = fs.statSync(path.join(PUBLIC_DIR, rel));
+      if (st.mtimeMs > maxMtime) maxMtime = st.mtimeMs;
+    } catch {}
+  }
+  return String(Math.floor(maxMtime));
+}
+
+function redactHostPaths(text, userRoot) {
+  let out = String(text || '');
+  if (userRoot) {
+    const escapedRoot = String(userRoot).replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+    out = out.replace(new RegExp(escapedRoot + '[\\\\/]?', 'gi'), './');
+  }
+  return out.replace(/[A-Za-z]:\\Users\\[^\\/\s"']+/gi, '<host>');
+}
+
+const runtimeProcCache = new Map();
+const runtimeProcInflight = new Map();
+
+function probeWorkspaceProcesses(user) {
+  const now = Date.now();
+  const cached = runtimeProcCache.get(user.name);
+  if (cached && now - cached.at < 2500) return Promise.resolve(cached.list);
+  if (runtimeProcInflight.has(user.name)) return runtimeProcInflight.get(user.name);
+
+  if (process.platform !== 'win32') return Promise.resolve([]);
+
+  const psScript = [
+    "$r = [Environment]::GetEnvironmentVariable('PROBE_ROOT')",
+    "$names = @('powershell.exe','pwsh.exe','cmd.exe','python.exe','python3.exe','node.exe','Rscript.exe','StataMP-64.exe','StataSE-64.exe','Stata-64.exe')",
+    "$out = @()",
+    "Get-CimInstance Win32_Process -ErrorAction SilentlyContinue | ForEach-Object {",
+    "  if ($names -notcontains $_.Name) { return }",
+    "  $cmd = [string]$_.CommandLine",
+    "  if (-not $cmd) { return }",
+    "  if ($cmd -match 'portal\\.mjs|stdio-to-ws|httpsbridge|baton-mcp|chrome-devtools-mcp|acp-engines|codex-acp|claude-agent-acp|PROBE_ROOT') { return }",
+    "  if ($r -and $cmd.IndexOf($r, [StringComparison]::OrdinalIgnoreCase) -ge 0) {",
+    "    $age = 0",
+    "    if ($_.CreationDate) { $age = [int][Math]::Max(0, ([DateTime]::Now - $_.CreationDate).TotalSeconds) }",
+    "    $out += [PSCustomObject]@{ pid = $_.ProcessId; name = $_.Name; cmd = $cmd; ageSec = $age }",
+    "  }",
+    "}",
+    "ConvertTo-Json -InputObject $out -Compress",
+  ].join('; ');
+
+  const prom = new Promise((resolve) => {
+    execFile(
+      'powershell.exe',
+      ['-NoProfile', '-NonInteractive', '-Command', psScript],
+      {
+        windowsHide: true,
+        timeout: 4500,
+        env: { ...process.env, PROBE_ROOT: user.root },
+      },
+      (err, stdout) => {
+        runtimeProcInflight.delete(user.name);
+        let list = [];
+        if (!err && stdout) {
+          try {
+            const parsed = JSON.parse(stdout.trim() || '[]');
+            const arr = Array.isArray(parsed) ? parsed : (parsed ? [parsed] : []);
+            list = arr.slice(0, 8).map(item => ({
+              pid: Number(item.pid || 0),
+              name: String(item.name || ''),
+              cmd: redactHostPaths(String(item.cmd || '').replace(/\s+/g, ' ').trim(), user.root).slice(0, 180),
+              ageSec: Number(item.ageSec || 0),
+            }));
+          } catch {}
+        }
+        runtimeProcCache.set(user.name, { at: Date.now(), list });
+        resolve(list);
+      }
+    );
+  });
+  runtimeProcInflight.set(user.name, prom);
+  return prom;
+}
+
+function readSessionLiveLog(user, sessionId) {
+  if (!sessionId || !/^[0-9a-f-]{16,64}$/i.test(sessionId)) return null;
+  const userSessions = readSessions(user.name);
+  if (!userSessions.some(s => s && s.acpSessionId === sessionId)) return null;
+
+  const home = os.homedir();
+  const baseCandidates = [
+    path.join(home, '.gemini', 'antigravity-cli', 'brain', sessionId, '.system_generated'),
+    path.join(home, '.gemini', 'antigravity', 'brain', sessionId, '.system_generated'),
+  ];
+
+  let latest = null;
+  const cutoff = Date.now() - 600000;
+  for (const baseDir of baseCandidates) {
+    if (!fs.existsSync(baseDir)) continue;
+    const tasksDir = path.join(baseDir, 'tasks');
+    try {
+      for (const name of fs.readdirSync(tasksDir)) {
+        if (!/^task-.*\.log$/i.test(name)) continue;
+        const abs = path.join(tasksDir, name);
+        const st = fs.statSync(abs);
+        if (st.isFile() && st.mtimeMs >= cutoff && (!latest || st.mtimeMs > latest.mtimeMs)) {
+          latest = { abs, source: `tasks/${name}`, mtimeMs: st.mtimeMs, size: st.size };
+        }
+      }
+    } catch {}
+
+    const stepsDir = path.join(baseDir, 'steps');
+    try {
+      for (const stepId of fs.readdirSync(stepsDir)) {
+        const abs = path.join(stepsDir, stepId, 'output.txt');
+        try {
+          const st = fs.statSync(abs);
+          if (st.isFile() && st.mtimeMs >= cutoff && (!latest || st.mtimeMs > latest.mtimeMs)) {
+            latest = { abs, source: `steps/${stepId}/output.txt`, mtimeMs: st.mtimeMs, size: st.size };
+          }
+        } catch {}
+      }
+    } catch {}
+  }
+
+  if (!latest) return null;
+  const maxBytes = 6144;
+  const toRead = Math.min(latest.size, maxBytes);
+  if (toRead <= 0) return { source: latest.source, mtimeMs: latest.mtimeMs, size: latest.size, tail: '' };
+  try {
+    const buf = Buffer.alloc(toRead);
+    const fd = fs.openSync(latest.abs, 'r');
+    try { fs.readSync(fd, buf, 0, toRead, Math.max(0, latest.size - toRead)); } finally { fs.closeSync(fd); }
+    let tail = buf.toString('utf8');
+    if (latest.size > toRead) {
+      const nl = tail.indexOf('\n');
+      if (nl >= 0 && nl < 200) tail = tail.slice(nl + 1);
+    }
+    tail = redactHostPaths(tail, user.root);
+    return { source: latest.source, mtimeMs: latest.mtimeMs, size: latest.size, tail };
+  } catch {
+    return null;
+  }
 }
 
 function servePublicFile(res, relFile, contentType) {
@@ -859,6 +1073,17 @@ const server = http.createServer(async (req, res) => {
       }
       if (p === '/api/engines' && req.method === 'GET') {
         sendJson(res, 200, detectEngines(ROOT));
+        return;
+      }
+      if (p === '/api/ui-version' && req.method === 'GET') {
+        sendJson(res, 200, { version: getUiVersion() });
+        return;
+      }
+      if (p === '/api/runtime-status' && req.method === 'GET') {
+        const sid = String(url.searchParams.get('sessionId') || '').trim();
+        const processes = await probeWorkspaceProcesses(user);
+        const liveLog = readSessionLiveLog(user, sid);
+        sendJson(res, 200, { now: Date.now(), processes, liveLog });
         return;
       }
       if (p === '/api/tree' && req.method === 'GET') {

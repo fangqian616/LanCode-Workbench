@@ -863,6 +863,207 @@ html[data-theme="paper"] .drop-overlay {
   z-index: 80;
 }
 
+/* Live Command Execution Banner & Hot-Update Notice */
+.hot-update-btn {
+  border: 1px solid var(--border-accent);
+  background: var(--bg-active);
+  color: var(--accent);
+  border-radius: 999px;
+  padding: 2px 10px;
+  font-size: 11px;
+  font-weight: 600;
+  cursor: pointer;
+  white-space: nowrap;
+}
+.hot-update-btn:hover { opacity: 0.9; }
+
+.tool-card.is-running {
+  border-color: rgba(245, 158, 11, 0.45);
+  background: rgba(245, 158, 11, 0.04);
+}
+.tool-elapsed {
+  font-family: var(--font-mono);
+  font-size: 10.5px;
+  color: var(--warning);
+  flex-shrink: 0;
+}
+
+.live-run-banner {
+  margin-top: 8px;
+  border: 1px solid var(--border-hairline);
+  border-left: 3px solid var(--accent);
+  border-radius: var(--radius-md);
+  background: var(--bg-sidebar);
+  padding: 8px 11px;
+  font-size: 11.5px;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+.live-run-banner.warn {
+  border-left-color: var(--warning);
+}
+.live-run-head {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+.live-run-title {
+  font-weight: 600;
+  color: var(--text-primary);
+}
+.live-run-meta {
+  font-family: var(--font-mono);
+  font-size: 11px;
+  color: var(--text-secondary);
+  margin-left: auto;
+}
+.live-proc-list {
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+}
+.live-proc-row {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-family: var(--font-mono);
+  font-size: 11px;
+  color: var(--text-soft);
+  background: var(--bg-input);
+  padding: 3px 7px;
+  border-radius: 5px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.live-log-wrap {
+  border: 1px solid var(--border-hairline);
+  border-radius: 6px;
+  background: var(--bg-input);
+  overflow: hidden;
+}
+.live-log-head {
+  padding: 3px 8px;
+  font-family: var(--font-mono);
+  font-size: 10.5px;
+  color: var(--text-muted);
+  border-bottom: 1px solid var(--border-hairline);
+  display: flex;
+  justify-content: space-between;
+}
+.live-log-tail {
+  margin: 0;
+  padding: 7px 9px;
+  font-family: var(--font-mono);
+  font-size: 11px;
+  line-height: 1.45;
+  max-height: 150px;
+  overflow: auto;
+  white-space: pre-wrap;
+  word-break: break-word;
+  color: var(--text-soft);
+}
+
+/* Inline Chat Workspace Links & Directory/Binary Preview Cards */
+.ws-link-wrap {
+  display: inline-flex;
+  align-items: baseline;
+  gap: 4px;
+}
+.ws-dl-chip {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  padding: 0 5px;
+  border-radius: 4px;
+  font-size: 11px;
+  line-height: 1.4;
+  background: var(--bg-active);
+  border: 1px solid var(--border-hairline);
+  color: var(--accent) !important;
+  text-decoration: none !important;
+  vertical-align: baseline;
+}
+.ws-dl-chip:hover {
+  border-color: var(--border-accent);
+  background: var(--bg-hover);
+}
+.ws-direct-dl {
+  color: var(--accent);
+  text-decoration: underline;
+}
+
+.dir-preview-card,
+.binary-preview-card {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  padding: 14px;
+  border: 1px solid var(--border-hairline);
+  border-radius: var(--radius-md);
+  background: var(--bg-sidebar);
+}
+.dir-preview-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+.dir-preview-title {
+  font-weight: 600;
+  font-size: 13px;
+  color: var(--text-primary);
+  word-break: break-all;
+}
+.dir-preview-sub {
+  font-size: 11.5px;
+  color: var(--text-secondary);
+}
+.dir-preview-actions {
+  display: flex;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+.dir-preview-list {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  max-height: 260px;
+  overflow-y: auto;
+  border-top: 1px solid var(--border-hairline);
+  padding-top: 8px;
+}
+.dir-preview-row {
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  padding: 5px 7px;
+  border-radius: var(--radius-sm);
+  cursor: pointer;
+  font-size: 12px;
+  color: var(--text-soft);
+}
+.dir-preview-row:hover {
+  background: var(--bg-hover);
+  color: var(--text-primary);
+}
+.dir-preview-name {
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.dir-preview-size {
+  font-family: var(--font-mono);
+  font-size: 10.5px;
+  color: var(--text-muted);
+  flex-shrink: 0;
+}
+
 @media (max-width: 960px) {
   .panel-left, .panel-right { position: absolute; top: 0; bottom: 0; z-index: 40; box-shadow: var(--shadow-md); }
   .panel-left { left: 0; }

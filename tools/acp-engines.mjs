@@ -156,6 +156,18 @@ function resolveSpecs(rootDir) {
 
 export function detectEngines(rootDir) {
   const specs = resolveSpecs(rootDir);
+  if (process.env.AGY_USE_EXTERNAL_RELAY === '1') {
+    specs.unshift({
+      id: 'relay',
+      name: 'External Relay',
+      badge: 'Relay',
+      available: true,
+      hostConfigured: true,
+      hint: 'External stdio-to-ws relay (AGY_USE_EXTERNAL_RELAY=1)',
+      exe: '',
+      args: [],
+    });
+  }
   const byId = new Map(specs.map(s => [s.id, s]));
 
   const explicit = String(process.env.LANCODE_DEFAULT_ENGINE || process.env.AGY_DEFAULT_ENGINE || '')
@@ -165,6 +177,8 @@ export function detectEngines(rootDir) {
   let defaultEngine = '';
   if (explicit && byId.has(explicit) && byId.get(explicit).available) {
     defaultEngine = explicit;
+  } else if (process.env.AGY_USE_EXTERNAL_RELAY === '1') {
+    defaultEngine = 'relay';
   } else {
     for (const candidateId of ['agy', 'codex', 'claude', 'gemini', 'opencode']) {
       const sp = byId.get(candidateId);
