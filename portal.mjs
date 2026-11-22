@@ -512,7 +512,9 @@ function serveFile(res, user, rel, download) {
   else if (!download && textExts.includes(ext)) { headers['Content-Type'] = 'text/plain; charset=utf-8'; }
   else { headers['Content-Type'] = 'application/octet-stream'; if (!download) headers['Content-Disposition'] = `attachment; filename*=UTF-8''${encodeURIComponent(path.basename(p))}`; }
   res.writeHead(200, headers);
-  fs.createReadStream(p).pipe(res);
+  const rs = fs.createReadStream(p);
+  rs.on('error', () => { try { res.destroy(); } catch {} });
+  rs.pipe(res);
 }
 
 function zipFolder(res, dirAbs) {
@@ -529,6 +531,7 @@ function zipFolder(res, dirAbs) {
       'Content-Length': fs.statSync(tmp).size,
     });
     const s = fs.createReadStream(tmp);
+    s.on('error', () => { try { res.destroy(); } catch {} try { fs.unlinkSync(tmp); } catch {} });
     s.pipe(res);
     s.on('close', () => { try { fs.unlinkSync(tmp); } catch {} });
   });
@@ -1409,6 +1412,13 @@ server.on('upgrade', (req, socket, head) => {
     log('WS upgrade error ' + (e && e.message || e));
     fail(500, 'Upgrade Failed');
   }
+});
+
+process.on('uncaughtException', (err) => {
+  log('UNCAUGHT_EXCEPTION: ' + ((err && err.stack) || err));
+});
+process.on('unhandledRejection', (reason) => {
+  log('UNHANDLED_REJECTION: ' + ((reason && reason.stack) || reason));
 });
 
 server.listen(PORTAL_PORT, '0.0.0.0', () => {
