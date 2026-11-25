@@ -14,6 +14,7 @@ import { detectEngines, attachEngineSession, shutdownAllEngines } from './tools/
 
 const ROOT = path.dirname(fileURLToPath(import.meta.url));
 const PUBLIC_DIR = path.join(ROOT, 'public');
+const KATEX_DIST_DIR = path.join(ROOT, 'node_modules', 'katex', 'dist');
 const CFG_FILE = process.env.AGY_CFG_FILE || path.join(ROOT, 'users.json');
 const USERS_DIR = process.env.AGY_USERS_DIR || path.join(ROOT, 'users');
 const ONLY_USER = (process.env.AGY_ONLY_USER || '').trim().toLowerCase();
@@ -1024,6 +1025,29 @@ const server = http.createServer(async (req, res) => {
     }
     if (p === '/assets/workbench.js' && req.method === 'GET') {
       servePublicFile(res, 'workbench.js', 'application/javascript; charset=utf-8'); return;
+    }
+    if (p.startsWith('/assets/katex/') && req.method === 'GET') {
+      const rel = p.slice('/assets/katex/'.length);
+      const abs = safeJoin(KATEX_DIST_DIR, rel);
+      if (!abs || !fs.existsSync(abs) || !fs.statSync(abs).isFile()) {
+        res.writeHead(404); res.end('not found'); return;
+      }
+      const ext = path.extname(abs).toLowerCase();
+      const mime = {
+        '.css': 'text/css; charset=utf-8',
+        '.js': 'application/javascript; charset=utf-8',
+        '.woff2': 'font/woff2',
+        '.woff': 'font/woff',
+        '.ttf': 'font/ttf',
+      }[ext] || 'application/octet-stream';
+      const buf = fs.readFileSync(abs);
+      res.writeHead(200, {
+        'Content-Type': mime,
+        'Content-Length': buf.length,
+        'Cache-Control': 'public, max-age=86400',
+      });
+      res.end(buf);
+      return;
     }
     if (p === '/logout') {
       res.writeHead(302, { 'Set-Cookie': 'agy_token=; Path=/; Max-Age=0', Location: '/' });

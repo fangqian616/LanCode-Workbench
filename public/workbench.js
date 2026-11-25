@@ -378,9 +378,63 @@
     return `<a href="${escHtml(res.href)}" target="_blank" rel="noopener noreferrer">${labelHtml}</a>`;
   }
 
+  function hasUnwrappedCjk(tex) {
+    const stripped = String(tex || '').replace(
+      /\\(?:text|mathrm|textbf|textit|textrm|operatorname)\s*\{(?:[^{}]|\{[^{}]*\})*\}/g,
+      ' '
+    );
+    return /[\u4e00-\u9fff]/.test(stripped);
+  }
+
+  function renderMathHtml(tex, displayMode) {
+    const cleanTex = String(tex || '').trim();
+    if (!cleanTex) return '';
+    if (window.katex && typeof window.katex.renderToString === 'function') {
+      try {
+        const rendered = window.katex.renderToString(cleanTex, {
+          displayMode: Boolean(displayMode),
+          throwOnError: false,
+          strict: 'ignore',
+          trust: false,
+        });
+        return displayMode
+          ? `<div class="math-block">${rendered}</div>`
+          : `<span class="math-inline">${rendered}</span>`;
+      } catch {}
+    }
+    return displayMode
+      ? `<pre class="preview-code"><code>${escHtml(cleanTex)}</code></pre>`
+      : `<code>${escHtml(cleanTex)}</code>`;
+  }
+
   function renderMarkdown(md) {
     const src = String(md || '').replace(/\r\n/g, '\n');
     const blocks = [];
+    const rawCodes = [];
+    const mathInlines = [];
+
+    const stashCode = (raw) => {
+      const idx = rawCodes.length;
+      rawCodes.push(raw);
+      return `\x00CODE${idx}\x00`;
+    };
+    const stashMath = (tex) => {
+      const idx = mathInlines.length;
+      mathInlines.push(renderMathHtml(tex, false));
+      return `\x00MATH${idx}\x00`;
+    };
+    const stashDisplayMath = (tex, offset, fullStr) => {
+      const lineStart = fullStr.lastIndexOf('\n', Math.max(0, offset - 1)) + 1;
+      const linePrefix = fullStr.slice(lineStart, offset);
+      if (/^\s*\|/.test(linePrefix) && !tex.includes('\n')) {
+        return stashMath(tex);
+      }
+      const idx = blocks.length;
+      blocks.push(renderMathHtml(tex, true));
+      return `\n\x00BLOCK${idx}\x00\n`;
+    };
+
+    // 1. Extract fenced code blocks before HTML escaping / math parsing
     let text = src.replace(/```([a-zA-Z0-9_-]*)\n([\s\S]*?)```/g, (_m, lang, code) => {
       const idx = blocks.length;
       const safeLang = escHtml(lang || 'text');
@@ -388,8 +442,34 @@
       blocks.push(
         `<div class="code-block"><div class="code-head"><span>${safeLang}</span><button class="btn copy-code-btn" type="button" data-code="${idx}">复制</button></div><pre><code>${safeCode}</code></pre></div>`
       );
-      return `\x00BLOCK${idx}\x00`;
+      return `\n\x00BLOCK${idx}\x00\n`;
     });
+
+    // 2. Extract inline code spans so $VARS or LaTeX inside backticks stays literal
+    text = text.replace(/`([^`\n]+)`/g, (_m, code) => stashCode(code));
+
+    // 3. Extract display math $$...$$ and \[...\]
+    text = text.replace(/(^|[^\\])\$\$([\s\S]+?)(?<!\\)\$\$/g, (m, lead, tex, offset, fullStr) => {
+      if (!String(tex || '').trim()) return m;
+      return lead + stashDisplayMath(tex, offset + lead.length, fullStr);
+    });
+    text = text.replace(/\\\[([\s\S]+?)\\\]/g, (m, tex, offset, fullStr) => {
+      if (!String(tex || '').trim()) return m;
+      return stashDisplayMath(tex, offset, fullStr);
+    });
+
+    // 4. Extract inline math \(...\) and $...$
+    text = text.replace(/\\\((.+?)\\\)/g, (m, tex) => {
+      if (!String(tex || '').trim()) return m;
+      return stashMath(tex);
+    });
+    text = text.replace(/(^|[^\\$])\$(?!\$|\s)((?:\\.|[^$\\\n])+?)(?<!\s|\\)\$(?!\$|\d)/g, (m, lead, tex) => {
+      if (hasUnwrappedCjk(tex)) return m;
+      return lead + stashMath(tex);
+    });
+
+    // 5. Unescape literal \$ in prose after math spans are extracted
+    text = text.replace(/\\\$/g, '$');
 
     text = escHtml(text);
 
@@ -402,7 +482,6 @@
         return k;
       };
       let out = s;
-      out = out.replace(/`([^`\n]+)`/g, (_m, code) => stash(`<code>${code}</code>`));
       out = out.replace(/\*\*([^*\n]+)\*\*/g, '<strong>$1</strong>');
       out = out.replace(/\[([^\]]+)\]\(((?:[^()\n]|\([^()\n]*\))+)\)/g, (_m, label, href) => {
         return stash(renderResolvedLinkHtml(label, href));
@@ -433,7 +512,11 @@
         if (!candidate) return full;
         return stash(renderResolvedLinkHtml(candidate, candidate)) + suffix;
       });
-      return out.replace(/\x00INL(\d+)\x00/g, (_m, idx) => inlines[Number(idx)] || '');
+      // Expand links first, then resolve inline code/math tokens (including inside link labels)
+      out = out.replace(/\x00INL(\d+)\x00/g, (_m, idx) => inlines[Number(idx)] || '');
+      out = out.replace(/\x00CODE(\d+)\x00/g, (_m, idx) => `<code>${escHtml(rawCodes[Number(idx)] ?? '')}</code>`);
+      out = out.replace(/\x00MATH(\d+)\x00/g, (_m, idx) => mathInlines[Number(idx)] || '');
+      return out;
     };
 
     const lines = text.split('\n');

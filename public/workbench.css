@@ -1064,6 +1064,29 @@ html[data-theme="paper"] .drop-overlay {
   flex-shrink: 0;
 }
 
+/* KaTeX Math Rendering */
+.math-block {
+  margin: 10px 0;
+  padding: 8px 12px;
+  overflow-x: auto;
+  overflow-y: hidden;
+  text-align: center;
+  background: rgba(128, 128, 128, 0.06);
+  border-radius: var(--radius-sm);
+}
+.math-inline {
+  display: inline;
+}
+.prose .katex {
+  font-size: 1.04em;
+  color: inherit;
+}
+.prose .katex-display {
+  margin: 0.15em 0;
+  overflow-x: auto;
+  overflow-y: hidden;
+}
+
 @media (max-width: 960px) {
   .panel-left, .panel-right { position: absolute; top: 0; bottom: 0; z-index: 40; box-shadow: var(--shadow-md); }
   .panel-left { left: 0; }
