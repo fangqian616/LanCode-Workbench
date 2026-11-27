@@ -59,6 +59,25 @@ export function proxyEnvironment(original, selected) {
   return env;
 }
 
+function readWindowsSystemProxy() {
+  if (process.platform !== 'win32') return { enabled: 0, server: '' };
+  try {
+    const out = execFileSync(
+      'reg.exe',
+      ['query', 'HKCU\\Software\\Microsoft\\Windows\\CurrentVersion\\Internet Settings'],
+      { encoding: 'utf8', windowsHide: true, timeout: 2000 }
+    );
+    const enMatch = /^\s*ProxyEnable\s+REG_DWORD\s+(0x[0-9a-f]+|\d+)/im.exec(out);
+    const srvMatch = /^\s*ProxyServer\s+REG_SZ\s+(.+)$/im.exec(out);
+    return {
+      enabled: enMatch ? Number(enMatch[1]) : 0,
+      server: srvMatch ? srvMatch[1].trim() : '',
+    };
+  } catch {
+    return { enabled: 0, server: '' };
+  }
+}
+
 export async function resolveProxy() {
   const explicitRaw = String(process.env.AGY_PROXY_URL || '').trim();
   if (/^(off|direct|none)$/i.test(explicitRaw)) {
@@ -70,17 +89,11 @@ export async function resolveProxy() {
     return { url, source: 'AGY_PROXY_URL' };
   }
 
-  try {
-    const query = "$p=Get-ItemProperty -LiteralPath 'HKCU:\\Software\\Microsoft\\Windows\\CurrentVersion\\Internet Settings' -ErrorAction SilentlyContinue; if($p){@{enabled=$p.ProxyEnable;server=$p.ProxyServer}|ConvertTo-Json -Compress}";
-    const out = execFileSync('powershell.exe', ['-NoProfile', '-Command', query], { encoding: 'utf8', windowsHide: true, timeout: 5000 }).trim();
-    if (out) {
-      const reg = JSON.parse(out);
-      const sysUrl = proxyUrl(reg.server);
-      if (reg.enabled === 1 && sysUrl && await reachable(sysUrl)) {
-        return { url: sysUrl, source: 'Windows system proxy' };
-      }
-    }
-  } catch {}
+  const reg = readWindowsSystemProxy();
+  const sysUrl = proxyUrl(reg.server);
+  if (reg.enabled === 1 && sysUrl && await reachable(sysUrl)) {
+    return { url: sysUrl, source: 'Windows system proxy' };
+  }
 
   for (const port of [10808, 10809, 7890, 7897, 1080, 2080, 8889, 8118, 3128]) {
     const url = `http://127.0.0.1:${port}`;
